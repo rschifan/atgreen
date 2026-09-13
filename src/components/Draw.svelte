@@ -428,10 +428,17 @@
 				break;
 		}
 
-		f.then((response) => {
-			response.json().then((response_json) => {
-				console.log('get_indmindistance_osm', response_json);
-
+		// `f.then(r => r.json().then(...))` did not return the inner promise, so
+		// .finally fired when the HEADERS arrived - the overlay vanished while a
+		// multi-megabyte body was still downloading and parsing - and a rejection
+		// inside the inner chain (an HTML error page, an aborted transfer) never
+		// reached .catch and became an unhandled rejection. No call site checked
+		// response.ok either, so a 500 body was parsed as if it were data.
+		(async () => {
+			try {
+				const response = await f;
+				if (!response.ok) throw new Error(`index request failed: HTTP ${response.status}`);
+				const response_json = await response.json();
 				if (response_json && response_json.features && response_json.features.length > 0) {
 					reference_data = response_json;
 					add_accessibility_layer(reference_data, reference_map);
@@ -439,14 +446,13 @@
 				} else {
 					empty_resultset_error = true;
 				}
-			});
-		})
-			.catch((error) => {
-				console.log('get_indmindistance_osm - error', error);
-			})
-			.finally(() => {
+			} catch (error) {
+				empty_resultset_error = true;
+				console.error('Draw: index request failed', error);
+			} finally {
 				loading.set(false);
-			});
+			}
+		})();
 	}
 
 	function handle_click_new_cell(payload) {
@@ -497,18 +503,20 @@
 				break;
 		}
 
-		f.then((response) => {
-			response.json().then((response_json) => {
-				new_data = response_json;
+		// Same fix as compute(): return the inner promise, check the status, and clear
+		// the overlay only once the body has actually been parsed and rendered.
+		(async () => {
+			try {
+				const response = await f;
+				if (!response.ok) throw new Error(`greenify request failed: HTTP ${response.status}`);
+				new_data = await response.json();
 				update_map_click(selected_cell_feature);
-			});
-		})
-			.catch((error) => {
-				console.log('get_indmindistance_osm - error', error);
-			})
-			.finally(() => {
+			} catch (error) {
+				console.error('Draw: greenify request failed', error);
+			} finally {
 				loading.set(false);
-			});
+			}
+		})();
 	}
 
 	function update_center(payload) {

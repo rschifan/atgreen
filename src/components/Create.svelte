@@ -164,23 +164,29 @@
 				break;
 		}
 
-		f.then((response) => {
-			response.json().then((response_json) => {
-				console.log('get_indmindistance_osm', response_json);
-
-				if (response_json && response_json.features && response_json.features.length > 0)
+		// `f.then(r => r.json().then(...))` did not return the inner promise, so
+		// .finally fired when the HEADERS arrived - the overlay vanished while a
+		// multi-megabyte body was still downloading and parsing - and a rejection
+		// inside the inner chain (an HTML error page, an aborted transfer) never
+		// reached .catch and became an unhandled rejection. No call site checked
+		// response.ok either, so a 500 body was parsed as if it were data.
+		(async () => {
+			try {
+				const response = await f;
+				if (!response.ok) throw new Error(`index request failed: HTTP ${response.status}`);
+				const response_json = await response.json();
+				if (response_json && response_json.features && response_json.features.length > 0) {
 					data = response_json;
-				else {
+				} else {
 					empty_resultset_error = true;
 				}
-			});
-		})
-			.catch((error) => {
-				console.log('get_indmindistance_osm - error', error);
-			})
-			.finally(() => {
+			} catch (error) {
+				empty_resultset_error = true;
+				console.error('Create: index request failed', error);
+			} finally {
 				loading.set(false);
-			});
+			}
+		})();
 	}
 
 	function update_cells_selected() {

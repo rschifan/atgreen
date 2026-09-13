@@ -251,39 +251,39 @@
 
 					let bandA: number, bandB: number;
 
-					let _indexA = metadata?.getTarget(indexA).index.band;
-					let _indexB = metadata?.getTarget(indexB).index.band;
+					// `metadata?.getTarget(x)` guards metadata but not the lookup: getTarget
+					// returns undefined for an unknown index, and `.index` on that throws.
+					const _indexA = metadata?.getTarget(indexA)?.index?.band;
+					const _indexB = metadata?.getTarget(indexB)?.index?.band;
 
-					if (_indexA >= 0 && _indexB >= 0) {
+					if (_indexA !== undefined && _indexB !== undefined && _indexA >= 0 && _indexB >= 0) {
 						loading.set(true);
 						bandA = _indexA;
 						bandB = _indexB;
 
-						Promise.all<{}>([
-							get_city_accessibility_band($current_city.text, bandA),
-							get_city_accessibility_band($current_city.text, bandB)
-						])
-							.then(([dA, dB]) => {
-								Promise.all<{}>([dA.json(), dB.json()]).then(([d_jsonA, d_jsonB]) => {
-									dataA = d_jsonA;
-									dataB = d_jsonB;
-									if (
-										dataA &&
-										dataA.features &&
-										dataA.features.length > 0 &&
-										dataB &&
-										dataB.features &&
-										dataB.features.length > 0
-									)
-										draw(dataA, dataB);
-								});
-							})
-							.catch((error) => {
-								console.log('compare - update - error', error);
-							})
-							.finally(() => {
+						// The inner Promise.all was not returned, so .finally cleared the
+						// overlay before either body had been parsed, and a JSON failure
+						// escaped .catch as an unhandled rejection.
+						(async () => {
+							try {
+								const [dA, dB] = await Promise.all([
+									get_city_accessibility_band($current_city.text, bandA),
+									get_city_accessibility_band($current_city.text, bandB)
+								]);
+								if (!dA.ok || !dB.ok)
+									throw new Error(`compare request failed: HTTP ${dA.status}/${dB.status}`);
+								const [d_jsonA, d_jsonB] = await Promise.all([dA.json(), dB.json()]);
+								dataA = d_jsonA;
+								dataB = d_jsonB;
+								if (dataA?.features?.length > 0 && dataB?.features?.length > 0) {
+									draw(dataA, dataB);
+								}
+							} catch (error) {
+								console.error('Compare: could not load the two indexes', error);
+							} finally {
 								loading.set(false);
-							});
+							}
+						})();
 					}
 				}
 			}

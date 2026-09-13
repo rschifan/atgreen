@@ -166,19 +166,27 @@
 				);
 			}
 
-			response?.then((data) => {
-				data.json().then((features) => {
-					loading.set(false);
-
-					if (features && features.features && features.features.length > 0) {
-						map.getSource(PGAS_SOURCE)?.setData(features);
-						adjust_zoom(features, map);
-					}
-				});
-			});
+			// This had no .catch at all, and loading.set(true) above it: a failed
+			// explanation request left the overlay up forever, because the enclosing
+			// try/catch cannot see a rejection from a promise it did not await.
+			if (!response) {
+				loading.set(false);
+				return;
+			}
+			try {
+				const data = await response;
+				if (!data.ok) throw new Error(`explanation request failed: HTTP ${data.status}`);
+				const features = await data.json();
+				if (features && features.features && features.features.length > 0) {
+					map.getSource(PGAS_SOURCE)?.setData(features);
+					adjust_zoom(features, map);
+				}
+			} finally {
+				loading.set(false);
+			}
 		} catch (error) {
 			loading.set(false);
-			console.log(error);
+			console.error('IndexExplanationLayer: explanation request failed', error);
 		}
 	}
 
