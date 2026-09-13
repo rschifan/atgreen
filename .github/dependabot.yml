@@ -15,18 +15,16 @@ updates:
         dependency-type: production
         update-types: [minor, patch]
     ignore:
-      # Majors are deliberate migrations, tracked in the remediation plan, not
-      # something to take piecemeal from a bot.
-      - dependency-name: svelte
+      # Every major is a deliberate migration tracked in the remediation plan, not
+      # something to take piecemeal from a bot: prettier 3 reformats the whole tree,
+      # vitest 5 and turf 7 change APIs, and svelte/kit/vite move together or not at
+      # all. Minor and patch updates still flow through the groups above.
+      - dependency-name: '*'
         update-types: [version-update:semver-major]
-      - dependency-name: '@sveltejs/kit'
-        update-types: [version-update:semver-major]
-      - dependency-name: vite
-        update-types: [version-update:semver-major]
+      # Carbon's minors have shipped breaking DOM changes before - the 0.76 to 0.112
+      # tooltip rewrite is what broke this site's homepage - so they are opt-in too.
       - dependency-name: carbon-components-svelte
-        update-types: [version-update:semver-major, version-update:semver-minor]
-      - dependency-name: mapbox-gl
-        update-types: [version-update:semver-major]
+        update-types: [version-update:semver-minor]
 
   - package-ecosystem: github-actions
     directory: /
