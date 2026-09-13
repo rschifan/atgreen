@@ -32,10 +32,10 @@
 	);
 
 	let percentage_formatter = format('.0%');
-	let logscale: boolean = false;
+	let logscale = false;
 	let width: number;
 	let n_indexes: number;
-	let visible: boolean = false;
+	let visible = false;
 	let data: CityStoreImpl;
 
 	let text: string;

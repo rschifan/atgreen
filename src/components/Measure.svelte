@@ -17,8 +17,8 @@
 
 	export let metadata;
 
-	let styleLoaded: boolean = false;
-	let mapLoaded: boolean = false;
+	let styleLoaded = false;
+	let mapLoaded = false;
 
 	onMount(() => {
 		current_accessibility_index.set('WHO');

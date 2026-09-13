@@ -31,10 +31,10 @@
 		{ id: 'grass', text: 'grass' }
 	];
 
-	let current_index_type: number = 0;
+	let current_index_type = 0;
 	let current_green_types = ['parks', 'forests', 'grass'];
-	let current_green_types_code: number = 0;
-	let cells_satisfying_target: number = 0.25;
+	let current_green_types_code = 0;
+	let cells_satisfying_target = 0.25;
 	// 0	{parks,forests,grass}
 	// 1	{parks,forests}
 	// 2	{parks,grass}
@@ -55,12 +55,12 @@
 	let data;
 
 	let map;
-	let styleLoaded: boolean = false;
-	let mapLoaded: boolean = false;
-	let unit: string = 'min';
+	let styleLoaded = false;
+	let mapLoaded = false;
+	let unit = 'min';
 	let empty_resultset_error = false;
 
-	let green_types_combobox_disabled: boolean = false;
+	let green_types_combobox_disabled = false;
 
 	const empty_geojson = { type: 'FeatureCollection', features: [] };
 

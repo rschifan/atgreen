@@ -18,7 +18,7 @@
 	const SELECTED_CITY_LABEL_LAYER = 'SELECTED_CITY_LABEL_LAYER';
 	const CITY_LABEL_LAYER = 'CITY_LABEL_LAYER';
 
-	let hovered_accessibility_cell_id: number = 0;
+	let hovered_accessibility_cell_id = 0;
 	let selected_cell_id: number;
 	let colors = ['#74c476', '#31a354', '#006d2c', 'white'];
 

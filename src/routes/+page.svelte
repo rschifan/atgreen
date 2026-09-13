@@ -56,7 +56,7 @@
 	let results: [] = [];
 	let events: [] = [];
 	let metadata: TargetStoreImpl;
-	let selectedTab: number = 0;
+	let selectedTab = 0;
 
 	const { _loading, data, _error } = useRequest(get_cities_metadata, {
 		initialData: []

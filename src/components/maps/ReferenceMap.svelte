@@ -21,20 +21,20 @@
 
 	let map: mapbox.Map;
 
-	export let mapLoaded: boolean = false;
-	export let styleLoaded: boolean = false;
-	export let height: number = 500;
+	export let mapLoaded = false;
+	export let styleLoaded = false;
+	export let height = 500;
 	export let container: string;
 	export let ref: object;
 
-	let width: number = 0;
+	let width = 0;
 
 	let unsubscribe_current_city_event: Unsubscriber;
 
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
 
-	let hovered_accessibility_cell_id: number = 0;
+	let hovered_accessibility_cell_id = 0;
 
 	const popup = new mapbox.Popup({
 		closeButton: false,

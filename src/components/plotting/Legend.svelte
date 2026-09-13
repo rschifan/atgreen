@@ -65,7 +65,7 @@
 			return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_WHITE, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
 	}
 
-	let loading: boolean = false;
+	let loading = false;
 	let minv: number;
 	let maxv: number;
 	let offset: number;
@@ -97,7 +97,7 @@
 		font_color: 'white'
 	};
 
-	let n_steps: number = 40;
+	let n_steps = 40;
 	let n_xticks: number;
 	let width_class: number;
 

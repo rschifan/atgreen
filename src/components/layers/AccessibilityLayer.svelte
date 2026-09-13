@@ -32,8 +32,8 @@
 	const ACCESSIBILITY_INDEX_SOURCE = 'ACCESSIBILITY_INDEX_SOURCE';
 	const ACCESSIBILITY_INDEX_LAYER = 'ACCESSIBILITY_INDEX_LAYER';
 
-	let visibilityToggle: boolean = true;
-	let hovered_accessibility_cell_id: number = 0;
+	let visibilityToggle = true;
+	let hovered_accessibility_cell_id = 0;
 	let selected_cell_id: number;
 	export let metadata;
 	export let map: mapbox.Map;
@@ -322,7 +322,7 @@
 
 		const value = feature.properties.v;
 
-		let value_string: string = '';
+		let value_string = '';
 
 		if (type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)

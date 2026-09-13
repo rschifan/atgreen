@@ -55,7 +55,7 @@
 
 	export let metadata;
 
-	let current_index_type: number = 0;
+	let current_index_type = 0;
 	let current_green_types = ['parks', 'forests', 'grass'];
 	let current_green_types_code: number;
 	// 0	{parks,forests,grass}
@@ -79,13 +79,13 @@
 
 	let create_button_disabled: boolean;
 
-	let referenceMapStyleLoaded: boolean = false;
-	let referenceMapLoaded: boolean = false;
-	let newMapStyleLoaded: boolean = false;
-	let newMapLoaded: boolean = false;
+	let referenceMapStyleLoaded = false;
+	let referenceMapLoaded = false;
+	let newMapStyleLoaded = false;
+	let newMapLoaded = false;
 	let empty_resultset_error = false;
 
-	let green_types_combobox_disabled: boolean = false;
+	let green_types_combobox_disabled = false;
 	let innerHeight: number;
 	let innerWidth: number;
 	let cell_id: number | undefined = undefined;

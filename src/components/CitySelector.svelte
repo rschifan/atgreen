@@ -13,9 +13,9 @@
 	export let data: object;
 
 	let map: mapbox.Map;
-	let mapLoaded: boolean = false;
-	let styleLoaded: boolean = false;
-	let open: boolean = false;
+	let mapLoaded = false;
+	let styleLoaded = false;
+	let open = false;
 
 	// let summary_request = useRequest(get_summary, {
 	// 	initialData: []

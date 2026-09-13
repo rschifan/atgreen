@@ -11,8 +11,8 @@
 
 	let map: mapbox.Map;
 
-	export let mapLoaded: boolean = false;
-	export let styleLoaded: boolean = false;
+	export let mapLoaded = false;
+	export let styleLoaded = false;
 	export let container: string;
 	export let ref;
 
@@ -36,7 +36,7 @@
 	const slowSpinZoom = 2;
 	export let userInteracting = false;
 	let spinEnabled = true;
-	let width: number = 0;
+	let width = 0;
 
 	$: userInteracting = $current_city ? true : false;
 

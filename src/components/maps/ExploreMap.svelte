@@ -10,9 +10,9 @@
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
 
-	export let mapLoaded: boolean = false;
-	export let styleLoaded: boolean = false;
-	export let height: number = 400;
+	export let mapLoaded = false;
+	export let styleLoaded = false;
+	export let height = 400;
 	export let container: string;
 	export let ref: object;
 	export let data: object;
@@ -21,7 +21,7 @@
 	export let selected_green_areas: [];
 
 	let selected_feature: object | undefined = undefined;
-	let width: number = 0;
+	let width = 0;
 
 	let unsubscribe_current_city_event: Unsubscriber;
 	const GREENAREAS_SOURCE = 'GREENAREAS_SOURCE';
@@ -41,8 +41,8 @@
 		8: 'wood',
 		9: 'forest'
 	};
-	let visibilityToggle: boolean = true;
-	let hovered_accessibility_cell_id: number = 0;
+	let visibilityToggle = true;
+	let hovered_accessibility_cell_id = 0;
 	let map: mapbox.Map;
 
 	const popup = new mapbox.Popup({

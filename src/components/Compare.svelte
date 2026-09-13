@@ -13,6 +13,7 @@
 	import { get_city_accessibility_band } from '../js/api';
 	import type { TargetStoreImpl } from '../js/types';
 	import { current_city, loading } from '../stores/stores';
+	import { count_transictions, get_bucket, get_buckets, get_frequencies, sum_k } from '../js/stats';
 
 	let accessibility_indexes = [
 		{ id: 0, text: 'WHO' },
@@ -35,8 +36,8 @@
 		map: { height: 400 }
 	};
 
-	let selectedIdA: number = 0;
-	let selectedIdB: number = 1;
+	let selectedIdA = 0;
+	let selectedIdB = 1;
 	let colors = ['#bae4b3', '#74c476', '#31a354', '#006d2c'];
 
 	let bucketsA: number[], bucketsB: number[];
@@ -203,62 +204,10 @@
 			});
 	}
 
-	function count_transictions(arr1: number[], arr2: number[]) {
-		let flows: {} = {};
-
-		if (arr1 && arr2) {
-			for (let i = 0; i < arr1.length; i++) {
-				const v1: number = arr1[i];
-				const v2: number = arr2[i];
-
-				if (v1 >= 0 && v2 >= 0)
-					if (!(v1 in flows)) {
-						flows[v1] = {};
-						flows[v1][v2] = 1;
-					} else {
-						if (!(v2 in flows[v1])) flows[v1][v2] = 1;
-						else flows[v1][v2] += 1;
-					}
-			}
-		}
-
-		return flows;
-	}
-
-	function get_buckets(values: number[], breaks: number[]): number[] {
-		return values.map((v: number) => {
-			return get_bucket(v, breaks);
-		});
-	}
-	function get_bucket(v: number, breaks: number[]): number {
-		for (let i: number = 0; i < breaks.length - 1; i++) {
-			if (v <= breaks[i + 1]) return i;
-		}
-		return 0;
-	}
-
-	function get_frequencies(array: number[]): number[] {
-		let frequencies: number[] = new Array(props.nbreaks + 1).fill(0);
-		array.forEach((element) => {
-			frequencies[element] += 1;
-		});
-		return frequencies;
-	}
-
 	function get_values(data) {
 		return data.features?.map((obj) => {
 			return obj.properties.v;
 		});
-	}
-
-	function sum_k(array: number[], k: number): number {
-		if (k == 0) return 0;
-
-		let acc: number = 0;
-		for (let index = 0; index < k; index++) {
-			acc += array[index];
-		}
-		return acc;
 	}
 
 	function get_y(i: number, index: number, innerHeight: number): number {
@@ -279,7 +228,7 @@
 		return innerWidth * rate;
 	}
 
-	let same_index: boolean = false;
+	let same_index = false;
 	async function update() {
 		if (selectedIdA >= 0 && selectedIdB >= 0) {
 			if (selectedIdA == selectedIdB) {
@@ -378,8 +327,8 @@
 		bucketsA = get_buckets(valuesA, breaksA);
 		bucketsB = get_buckets(valuesB, breaksB);
 
-		freqA = get_frequencies(bucketsA);
-		freqB = get_frequencies(bucketsB);
+		freqA = get_frequencies(bucketsA, props.nbreaks);
+		freqB = get_frequencies(bucketsB, props.nbreaks);
 		flows = count_transictions(bucketsA, bucketsB);
 	}
 
@@ -713,7 +662,6 @@
 			</svg>
 		</div>
 	</div>
-
 {/if}
 
 <style>

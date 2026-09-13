@@ -34,8 +34,8 @@
 		font_color: 'white'
 	};
 
-	let n_steps: number = 40;
-	let n_xticks: number = 4;
+	let n_steps = 40;
+	let n_xticks = 4;
 	let width_class: number;
 	let minv: number;
 	let maxv: number;

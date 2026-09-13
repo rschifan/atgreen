@@ -8,13 +8,13 @@
 
 	let map: mapbox.Map;
 
-	export let mapLoaded: boolean = false;
-	export let styleLoaded: boolean = false;
-	export let height: number = 500;
+	export let mapLoaded = false;
+	export let styleLoaded = false;
+	export let height = 500;
 	export let container: string;
 	export let ref;
 
-	let width: number = 0;
+	let width = 0;
 
 	let unsubscribe_current_city_event: Unsubscriber;
 

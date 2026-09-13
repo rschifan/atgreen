@@ -17,9 +17,9 @@
 
 	let map: mapbox.Map;
 
-	export let mapLoaded: boolean = false;
-	export let styleLoaded: boolean = false;
-	export let height: number = 500;
+	export let mapLoaded = false;
+	export let styleLoaded = false;
+	export let height = 500;
 	export let container: string;
 	export let ref: object;
 	export let data: object;
@@ -29,13 +29,13 @@
 	export let size: number;
 	export let distance: number;
 
-	let width: number = 0;
+	let width = 0;
 
 	let unsubscribe_current_city_event: Unsubscriber;
 	const NEW_INDEX_SOURCE = 'NEW_INDEX_SOURCE';
 	const NEW_INDEX_LAYER = 'NEW_INDEX_LAYER';
-	let visibilityToggle: boolean = true;
-	let hovered_accessibility_cell_id: number = 0;
+	let visibilityToggle = true;
+	let hovered_accessibility_cell_id = 0;
 
 	const popup = new mapbox.Popup({
 		closeButton: false,
@@ -250,7 +250,7 @@
 		let target_predicate;
 		const value = feature.properties.v;
 
-		let value_string: string = '';
+		let value_string = '';
 
 		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)

@@ -25,8 +25,8 @@
 	const NEW_INDEX_SOURCE = 'NEW_INDEX_SOURCE';
 	const NEW_INDEX_LAYER = 'NEW_INDEX_LAYER';
 
-	let visibilityToggle: boolean = true;
-	let hovered_accessibility_cell_id: number = 0;
+	let visibilityToggle = true;
+	let hovered_accessibility_cell_id = 0;
 
 	const popup = new mapbox.Popup({
 		closeButton: false,
@@ -214,7 +214,7 @@
 		let target_predicate;
 		const value = feature.properties.v;
 
-		let value_string: string = '';
+		let value_string = '';
 
 		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)
