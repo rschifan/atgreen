@@ -228,7 +228,11 @@
 
 				<p>
 					More information on the definition of green in both dataset and the data processing is
-					provided at <span><a href="">arvix link</a></span>
+					provided at <span
+						><a href="https://arxiv.org/abs/2308.05538" target="_blank" rel="noopener noreferrer"
+							>arXiv:2308.05538</a
+						></span
+					>
 				</p>
 
 				<h3>Which accessibility indicators do we measure?</h3>

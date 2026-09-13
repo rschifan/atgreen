@@ -526,12 +526,13 @@
 							fill={colors[q]}
 							stroke-width={props.stroke.width}
 							stroke={props.stroke.color}
-							on:mouseover={(d) => {
-								select_bucket(q, true);
-							}}
-							on:mouseleave={(d) => {
-								unselect_bucket();
-							}}
+							role="button"
+							tabindex="0"
+							aria-label="Highlight group {q}"
+							on:mouseover={() => select_bucket(q, true)}
+							on:focus={() => select_bucket(q, true)}
+							on:mouseleave={() => unselect_bucket()}
+							on:blur={() => unselect_bucket()}
 						/>
 					{/each}
 					<g>
@@ -616,12 +617,13 @@
 							fill={colors[q]}
 							stroke-width={props.stroke.width}
 							stroke={props.stroke.color}
-							on:mouseover={(d) => {
-								select_bucket(q, false);
-							}}
-							on:mouseleave={(d) => {
-								unselect_bucket();
-							}}
+							role="button"
+							tabindex="0"
+							aria-label="Highlight group {q}"
+							on:mouseover={() => select_bucket(q, false)}
+							on:focus={() => select_bucket(q, false)}
+							on:mouseleave={() => unselect_bucket()}
+							on:blur={() => unselect_bucket()}
 							on:focus={(d) => {}}
 						/>
 					{/each}
