@@ -123,7 +123,7 @@
 
 		<div class="block">
 			<Slider
-				fullWidth={'false'}
+				fullWidth="false"
 				step="1"
 				labelText="Minimum size (ha)"
 				min={Math.floor(minv)}

@@ -275,14 +275,14 @@
 		target_string = target_predicate
 			? `This cell <span style="font-weight:bold">does</span> meet your target (${format('.1f')(
 					value
-			  )} ${unit} ${
+				)} ${unit} ${
 					index_type == AccessibilityIndexType.MINIMUM_DISTANCE ? '<' : '>'
-			  } ${threshold} ${unit} )`
+				} ${threshold} ${unit} )`
 			: `This cell <span style="font-weight:bold">does not </span> meet your target (${format(
 					'.1f'
-			  )(value)} ${unit} ${
+				)(value)} ${unit} ${
 					index_type == AccessibilityIndexType.MINIMUM_DISTANCE ? '>' : '<'
-			  } ${threshold} ${unit} )`;
+				} ${threshold} ${unit} )`;
 
 		return (
 			'<div style="color:black;padding:0px;margin:0px;"><p style="font-size:1em">' +

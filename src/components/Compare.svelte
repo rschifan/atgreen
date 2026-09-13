@@ -544,7 +544,7 @@
 								dominant-baseline="auto"
 								text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
 								class="small"
-								fill={'white'}
+								fill="white"
 								x={get_x(q, 0, innerWidth)}
 								y={props.rectangles.width + props.margins.top + 5}
 								>{format('.0s')(breaksA[q])}
@@ -560,7 +560,7 @@
 								dominant-baseline="auto"
 								text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
 								class="small"
-								fill={'white'}
+								fill="white"
 								x={get_x(q, 0, innerWidth) + get_width(q, 0, innerWidth) / 2}
 								y={0}
 								>{get_node_label(q, '')}
@@ -637,7 +637,7 @@
 							dominant-baseline="auto"
 							text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
 							class="small"
-							fill={'white'}
+							fill="white"
 							x={get_x(q, 1, innerWidth)}
 							y={props.rectangles.width + props.margins.top + 5}
 							>{format('.0s')(breaksB[q])}
@@ -653,7 +653,7 @@
 							dominant-baseline="auto"
 							text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
 							class="small"
-							fill={'white'}
+							fill="white"
 							x={get_x(q, 1, innerWidth) + get_width(q, 1, innerWidth) / 2}
 							y={0}
 							>{get_node_label(q, '')}

@@ -135,7 +135,7 @@
 
 <Header
 	persistentHamburgerMenu={false}
-	company="ATGreen"
+	companyName="ATGreen"
 	platformName={$current_city?.text}
 	bind:isSideNavOpen
 >

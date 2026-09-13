@@ -198,5 +198,5 @@
 </script>
 
 {#if $current_cell && $current_cell.x != -1 && $current_cell.y != -1}
-	<ButtonMap title={'Deselect cell'} action={back} {map} icon={Exit} />
+	<ButtonMap title="Deselect cell" action={back} {map} icon={Exit} />
 {/if}
