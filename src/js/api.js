@@ -33,7 +33,7 @@ const alovaInstance = createAlova({
 			loading.set(false);
 
 			if (response.status >= 400) {
-				console.log('response.status >= 400');
+				console.error('RPC returned', response.status, response.statusText);
 				throw new Error(response.statusText);
 			}
 
@@ -41,7 +41,9 @@ const alovaInstance = createAlova({
 
 			if (!json) {
 				// This request will throw an error when an error is thrown or a Promise instance in the reject state is returned
-				throw new Error('received not well-formed json data:', json);
+				// `new Error(message, value)` silently discards the value — the second
+				// argument is ErrorOptions, not a format argument.
+				throw new Error('received not well-formed json data');
 			}
 			// The parsed response data will be passed to the transformData hook function of the method instance, and these functions will be explained later
 			return json;
@@ -51,7 +53,7 @@ const alovaInstance = createAlova({
 		// This interceptor will be entered when the request is wrong.
 		// The second parameter is the method instance of the current request, you can use it to synchronize the configuration information before and after the request
 		onError: async (error, method) => {
-			console.log(error.message);
+			console.error('RPC request failed:', error.message);
 			loading.set(false);
 		}
 	},
@@ -116,193 +118,87 @@ export const get_greenareas_osm = (cityname) =>
 		params: { cityname: cityname }
 	});
 
-export function get_city_accessibility_band(city, band) {
-	return new Promise(function (resolve, reject) {
-		try {
-			if (!city.endsWith('.tiff')) city = city += '.tiff';
+/**
+ * One place where every raw RPC call is made.
+ *
+ * The seven functions below each wrapped `fetch` in `new Promise(resolve, reject)`
+ * whose try/catch could only ever catch a synchronous URLSearchParams error — the
+ * reject branch was dead for network failures — and none had a timeout, so a
+ * stalled request hung its caller indefinitely with the loading overlay up. They
+ * also logged every URL and its parameters to the console.
+ *
+ * The contract is unchanged: this resolves to a Response, so callers keep doing
+ * their own `response.ok` check and `.json()`. Collapsing these onto the alova
+ * client — which resolves to parsed JSON — would change that contract at every
+ * call site in Create and Draw, the two least test-covered views, so it is left
+ * as separate work rather than done blind.
+ */
+const RPC_BASE = 'https://atgreen.hpc4ai.unito.it/rpc';
+// A city-wide index can genuinely take a minute; the point of the timeout is that
+// a stalled connection eventually rejects instead of hanging forever.
+const RPC_TIMEOUT_MS = 120000;
 
-			let response;
-			let params_url = new URLSearchParams({
-				city: city,
-				band: band
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/getaccessibility?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/getaccessibility?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('get_city_accessibility_band: ' + error);
-		}
-	});
+/**
+ * @param {string} path RPC function name, e.g. 'getaccessibility'
+ * @param {Record<string, string | number>} params query parameters
+ * @returns {Promise<Response>}
+ */
+function rpc(path, params) {
+	const url = `${RPC_BASE}/${path}?${new URLSearchParams(params)}`;
+	return fetch(url, { signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
 }
 
+/** @param {string} city @param {number} band @returns {Promise<Response>} */
+export function get_city_accessibility_band(city, band) {
+	const filename = city.endsWith('.tiff') ? city : `${city}.tiff`;
+	return rpc('getaccessibility', { city: filename, band });
+}
+
+/** @param {string} cityname @param {number} pga_size @param {number} green_code @returns {Promise<Response>} */
 export function get_indmindistance_osm(cityname, pga_size, green_code) {
 	// indmindistance_osm(cityname text, pga_size numeric, green_code text)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				green_code: green_code
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/indmindistance_osm?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/indmindistance_osm?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('get_indmindistance_osm: ' + error);
-		}
-	});
+	return rpc('indmindistance_osm', { cityname, pga_size, green_code });
 }
 
+/** @param {string} cityname @param {number} pga_size @param {number} distance @returns {Promise<Response>} */
 export function get_indexposure_esa(cityname, pga_size, distance) {
 	// indexposure_esa(cityname text, pga_size numeric, distance numeric)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				distance: distance
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/indexposure_esa?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/indexposure_esa?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('get_indexposure_esa: ' + error);
-		}
-	});
+	return rpc('indexposure_esa', { cityname, pga_size, distance });
 }
 
+/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} green_code @returns {Promise<Response>} */
 export function get_indperperson_osm(cityname, pga_size, distance, green_code) {
 	// indperperson_osm(cityname text, pga_size numeric, distance numeric, green_code text)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				distance: distance,
-				green_code: green_code
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/indperperson_osm?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/indperperson_osm?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('indperperson_osm: ' + error);
-		}
-	});
+	return rpc('indperperson_osm', { cityname, pga_size, distance, green_code });
 }
 
+/** @param {string} cityname @param {number} pga_size @param {number} green_code @param {number} cell_id @returns {Promise<Response>} */
 export function newgreen_mindistance_osm(cityname, pga_size, green_code, cell_id) {
 	// newgreen_mindistance_osm(cityname text, pga_size numeric, green_code text, new_green_id numeric)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				green_code: green_code,
-				new_green_id: cell_id
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/newgreen_mindistance_osm?' + params_url);
-			response = fetch(
-				'https://atgreen.hpc4ai.unito.it/rpc/newgreen_mindistance_osm?' + params_url
-			);
-			resolve(response);
-		} catch (error) {
-			reject('newgreen_mindistance_osm: ' + error);
-		}
-	});
+	return rpc('newgreen_mindistance_osm', { cityname, pga_size, green_code, new_green_id: cell_id });
 }
 
+/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} size @param {number} cell_id @returns {Promise<Response>} */
 export function newgreen_exposure_esa(cityname, pga_size, distance, size, cell_id) {
 	// newgreen_exposure_esa(cityname text, pga_size numeric, distance numeric, newarea_size numeric, newarea_id numeric)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				distance: distance,
-				newarea_size: size,
-				newarea_id: cell_id
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/newgreen_exposure_esa?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/newgreen_exposure_esa?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('newgreen_exposure_esa: ' + error);
-		}
+	return rpc('newgreen_exposure_esa', {
+		cityname,
+		pga_size,
+		distance,
+		newarea_size: size,
+		newarea_id: cell_id
 	});
 }
 
+/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} green_code @param {number} size @param {number} cell_id @returns {Promise<Response>} */
 export function newgreen_perperson_osm(cityname, pga_size, distance, green_code, size, cell_id) {
 	// newgreen_perperson_osm(cityname text, pga_size numeric, distance numeric, green_code text, newgreen_size numeric, newgreen_id numeric)
-	return new Promise(function (resolve, reject) {
-		try {
-			let response;
-			let params_url = new URLSearchParams({
-				cityname: cityname,
-				pga_size: pga_size,
-				distance: distance,
-				green_code: green_code,
-				newgreen_size: size,
-				newgreen_id: cell_id
-			});
-			console.log('https://atgreen.hpc4ai.unito.it/rpc/newgreen_perperson_osm?' + params_url);
-			response = fetch('https://atgreen.hpc4ai.unito.it/rpc/newgreen_perperson_osm?' + params_url);
-			resolve(response);
-		} catch (error) {
-			reject('newgreen_perperson_osm: ' + error);
-		}
+	return rpc('newgreen_perperson_osm', {
+		cityname,
+		pga_size,
+		distance,
+		green_code,
+		newgreen_size: size,
+		newgreen_id: cell_id
 	});
 }
-
-// export function get_city_accessibility_band(city: string, band: number) {
-
-//     return new Promise(function (resolve, reject) {
-//         try {
-
-//             if (!city.endsWith(".tiff"))
-//                 city = city += ".tiff"
-
-//             dataLoading.set(true);
-//             client
-//                 .rpc('getaccessibility', { city: city, band: band })
-//                 .then((response: any) => {
-//                     if (!response.data.features)
-//                         response.data.features = []
-//                     resolve(response.data);
-//                     console.log("get_city_accessibility_band: ", response.data)
-//                     dataLoading.set(false);
-//                 });
-//         } catch (error) {
-//             reject("get_city_accessibility_band: " + error)
-//             dataLoading.set(false);
-//         }
-
-//     });
-// }
-
-// export async function get_city_accessibility_index(city: string, index: string) {
-//     console.log("get_city_accessibility_index", city, index)
-
-//     dataLoading.set(true);
-
-//     let band: number | undefined = metadataStore.getBand(index);
-
-//     console.log('[api.ts] Loading data for city:', city, 'layer:', index, 'band:', band);
-
-//     if (band) {
-//         dataLoading.set(true);
-//         let accessibility_dataframe: any = await get_city_accessibility_band(city + '.tiff', band);
-//         console.log('[api.ts] loaded', accessibility_dataframe.features.length, "features");
-//         accessibility_dataframe.features =
-//             accessibility_dataframe.features.filter((d: object) => d.properties.v >= 0)
-
-//         console.log('[api.ts] loaded', accessibility_dataframe.features.length, "features (>=0)");
-//         accessibility_data_layer.set(accessibility_dataframe);
-//         dataLoading.set(false);
-//     }
-
-// }
