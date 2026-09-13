@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: 'ATGreen — interactive interface for multi-dimensional urban green accessibility'
+message: 'If you use this software or the indicators it presents, please cite the paper below.'
+type: software
+authors:
+  - family-names: Battiston
+    given-names: Alice
+  - family-names: Schifanella
+    given-names: Rossano
+    affiliation: University of Turin
+repository-code: 'https://github.com/rschifan/atgreen'
+url: 'https://atgreen.hpc4ai.unito.it/'
+license: MIT
+preferred-citation:
+  type: article
+  title: 'On the need to move from a single indicator to a multi-dimensional framework to measure accessibility to urban green'
+  authors:
+    - family-names: Battiston
+      given-names: Alice
+    - family-names: Schifanella
+      given-names: Rossano
+  year: 2023
+  journal: 'arXiv preprint'
+  url: 'https://arxiv.org/abs/2308.05538'
+  identifiers:
+    - type: other
+      value: 'arXiv:2308.05538'

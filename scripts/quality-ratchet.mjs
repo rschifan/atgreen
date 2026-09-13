@@ -79,7 +79,9 @@ for (const [name, count] of Object.entries(current)) {
 		console.error(`${name}: no baseline recorded. Run --update.`);
 		failed = true;
 	} else if (count > before) {
-		console.error(`${name}: ${count}, up from ${before} — this change introduced ${count - before}.`);
+		console.error(
+			`${name}: ${count}, up from ${before} — this change introduced ${count - before}.`
+		);
 		failed = true;
 	} else if (count < before) {
 		console.log(`${name}: ${count}, down from ${before}. Lower the baseline with --update.`);
