@@ -22,6 +22,11 @@ export function adjust_zoom(data: any, map: mapbox.Map, animate = false, padding
 }
 
 export function get_green_types_code(green_types: []) {
+	// An empty selection used to join to '', match no case, and fall through to the
+	// default 0 — which is the code for *all three* types. Deselecting everything
+	// therefore asked for everything. Undefined lets the caller refuse the request
+	// rather than silently invert it.
+	if (green_types && green_types.length === 0) return undefined;
 	if (green_types) {
 		const types = green_types.join(',');
 		switch (types) {

@@ -50,7 +50,8 @@
 	$: innerWidth = width - margins.left - margins.right;
 	$: width_class = innerWidth / n_steps;
 
-	$: if (threshold) update();
+	// A target of 0 is a real value and is falsy, so the legend never redrew for it.
+	$: if (threshold !== undefined && threshold !== null) update();
 
 	function update() {
 		colorScale = scaleDiverging().domain([minv, threshold, maxv]).range(get_color_range());

@@ -13,7 +13,10 @@ export function get_bucket(v: number, breaks: number[]): number {
 	for (let i = 0; i < breaks.length - 1; i++) {
 		if (v <= breaks[i + 1]) return i;
 	}
-	return 0;
+	// Anything above the last break falls in the top class. The old code returned
+	// 0 here — the *lowest* class — so a value outside the range the breaks were
+	// computed from was drawn as its own opposite.
+	return Math.max(0, breaks.length - 2);
 }
 
 export function get_buckets(values: number[], breaks: number[]): number[] {
@@ -72,4 +75,47 @@ export function count_transictions(
 	}
 
 	return flows;
+}
+
+/** A grid cell's value in each of the two indexes being compared. */
+export interface JoinedCell {
+	x: number;
+	y: number;
+	a: number;
+	b: number;
+}
+
+/**
+ * Pair up two indexes cell by cell.
+ *
+ * Compare used to zip the two value arrays by position after filtering each one
+ * independently for `v >= 0`. That is only valid if both describe the same cells
+ * in the same order, and they do not: different indexes cover different numbers
+ * of cells (Turin: 3,755 for WHO against 3,867 for BE3), so past the first
+ * divergence every pair compared two different places, and the surplus was
+ * silently dropped by the shorter array.
+ *
+ * Features carry no stable `id` property — only `x`, `y` and `v` — so the grid
+ * coordinates are the join key. Cells missing from either side, or flagged
+ * no-data on either side, are excluded: a comparison needs both halves.
+ */
+export function join_on_cell(
+	featuresA: { properties: { x: number; y: number; v: number } }[],
+	featuresB: { properties: { x: number; y: number; v: number } }[]
+): JoinedCell[] {
+	const byCell = new Map<string, number>();
+	for (const f of featuresA ?? []) {
+		const { x, y, v } = f.properties;
+		if (v >= 0) byCell.set(`${x}:${y}`, v);
+	}
+
+	const joined: JoinedCell[] = [];
+	for (const f of featuresB ?? []) {
+		const { x, y, v } = f.properties;
+		if (v < 0) continue;
+		const a = byCell.get(`${x}:${y}`);
+		if (a === undefined) continue;
+		joined.push({ x, y, a, b: v });
+	}
+	return joined;
 }

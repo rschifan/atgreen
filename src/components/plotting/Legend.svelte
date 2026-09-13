@@ -45,9 +45,11 @@
 
 					loading = false;
 
-					window.onresize = () => {
-						offset = (containerWidth - width - 20) / 2;
-					};
+					// `window.onresize = ...` used to be here: it clobbered any other
+					// handler on the page, was never removed, and sat inside a data
+					// subscriber so it was reassigned on every payload. It was also
+					// redundant — `$: offset = ...` below already recomputes from
+					// containerWidth, which the parent binds with <svelte:window>.
 				}
 			}
 		);

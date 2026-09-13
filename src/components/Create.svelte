@@ -68,7 +68,10 @@
 	$: green_types_combobox_disabled = current_index_type == AccessibilityIndexType.EXPOSURE;
 	$: time_budget_slider_disabled = current_index_type == AccessibilityIndexType.MINIMUM_DISTANCE;
 
-	$: if (current_index_type) {
+	// AccessibilityIndexType.MINIMUM_DISTANCE is 0, which is falsy, so this block
+	// never ran for it: switching to exposure (ha) and back left the label reading
+	// "ha" for a value in minutes.
+	$: if (current_index_type !== undefined && current_index_type !== null) {
 		switch (current_index_type) {
 			case AccessibilityIndexType.MINIMUM_DISTANCE:
 				unit = 'min';
@@ -135,6 +138,13 @@
 		let city = $current_city.text;
 
 		current_green_types_code = get_green_types_code(current_green_types);
+		// An empty green-type selection now yields undefined rather than silently
+		// meaning "all three". Refuse the request and say so, instead of sending
+		// green_code=undefined to the API.
+		if (current_green_types_code === undefined) {
+			empty_resultset_error = true;
+			return;
+		}
 
 		// FUNCTIONS:
 		// indmindistance_osm(cityname text, pga_size numeric, green_code text)

@@ -30,7 +30,7 @@ describe('ToRGB', () => {
 
 	// Known gap: three-digit shorthand is valid CSS and is not handled. Callers do not
 	// check for undefined, so a shorthand colour would propagate as undefined.
-	it.fails('should accept three-digit shorthand hex', () => {
+	it('accepts three-digit shorthand hex', () => {
 		expect(ToRGB('#fff')).toEqual([255, 255, 255]);
 	});
 

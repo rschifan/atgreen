@@ -4,6 +4,7 @@
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { get_greenareas_osm } from '../js/api';
+	import { extent } from '../js/layers';
 	import { current_city } from '../stores/stores';
 	import ExploreMap from './maps/ExploreMap.svelte';
 
@@ -20,13 +21,20 @@
 		{ text: 'forest', id: 9 }
 	];
 
-	let green_types_selected_ids: [] = [];
-	let green_areas_names: [] = [];
+	// `[]` as a type annotation means "an array that can only ever be empty", which
+	// is why pushing to these was an error. `data: object` likewise hid every
+	// property access behind an error.
+	type GreenFeature = {
+		properties: { osm_value: number; osm_name: string; size: number };
+	};
+
+	let green_types_selected_ids: number[] = [];
+	let green_areas_names: string[] = [];
 	let current_search_text_value = '';
 	let selectedResultIndex = 0;
 	let current_minimum_size: number;
-	let results: [] = [];
-	let data: object;
+	let results: string[] | undefined = [];
+	let data: { features: GreenFeature[] } | undefined;
 	let minv = 0;
 	let maxv = 0;
 	let ref: object;
@@ -58,25 +66,22 @@
 
 	$: if (data && data.features.length > 0) {
 		const current_ids = new Set<number>();
-
-		minv = Number.MAX_VALUE;
-		maxv = 0;
 		green_areas_names = [];
 
-		// osm_id 1056837260
-		// osm_name ""
-		// osm_value 4
-		// size 0.04468435897470579
+		// The slider bounds used to be scanned here by hand, from
+		// `el.properties.size.toFixed(2)` — a STRING, so once maxv held one the
+		// comparisons went lexicographic ("9.00" > "10.00" is true) — with an `else`
+		// that meant a value updating maxv was never tested against minv. minv
+		// therefore kept its Number.MAX_VALUE seed whenever the first element was the
+		// largest, and reached the slider as Math.floor(1.79e308).
+		//
+		// extent() in js/layers.ts already does this correctly and is unit tested,
+		// including for NaN and empty input.
+		({ min: minv, max: maxv } = extent(data.features.map((el) => Number(el.properties.size))));
+
 		data.features.forEach((el) => {
-			let green_type = el.properties.osm_value;
-			let green_name = el.properties.osm_name;
-			let size = el.properties.size.toFixed(2);
-
-			if (size > maxv) maxv = size;
-			else if (size < minv) minv = size;
-
-			current_ids.add(green_type);
-			if (green_name) green_areas_names.push(green_name);
+			current_ids.add(el.properties.osm_value);
+			if (el.properties.osm_name) green_areas_names.push(el.properties.osm_name);
 		});
 
 		green_types_selected_ids = Array.from(current_ids);

@@ -26,7 +26,7 @@ describe('get_green_types_code', () => {
 	// Known defect: [] is truthy, joins to '', matches no case and falls through to the
 	// default 0 - which is the code for *all three* green types. Deselecting everything
 	// therefore asks for everything. The UI should reject an empty selection instead.
-	it.fails('should not treat an empty selection as "all types"', () => {
+	it('does not treat an empty selection as "all types"', () => {
 		expect(get_green_types_code([] as never)).not.toBe(0);
 	});
 });

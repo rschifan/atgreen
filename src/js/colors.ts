@@ -15,6 +15,12 @@ export function ToRGBA(rgb: number[], opacity: number): string {
 }
 
 export function ToRGB(hex: string): number[] | undefined {
+	// Three-digit shorthand is valid CSS and was rejected, returning undefined —
+	// which no caller checks, so it propagated as undefined into colour maths.
+	const short = /^#?([a-f\d])([a-f\d])([a-f\d])$/i.exec(hex);
+	if (short) {
+		return [1, 2, 3].map((i) => parseInt(short[i] + short[i], 16));
+	}
 	const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 	return result
 		? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]

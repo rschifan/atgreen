@@ -38,7 +38,10 @@
 		init();
 
 		unsubscribe_current_cell_event = current_cell.subscribe((data) => {
-			if (data) compute_explanation();
+			// back() sets {x:-1, y:-1} to mean "nothing selected", which is a truthy
+			// object — so deselecting used to fire an explanation request for the cell
+			// id derived from (-1,-1).
+			if (data && data.x !== -1 && data.y !== -1) compute_explanation();
 		});
 	});
 
@@ -166,14 +169,10 @@
 				);
 			}
 
-			// This had no .catch at all, and loading.set(true) above it: a failed
-			// explanation request left the overlay up forever, because the enclosing
-			// try/catch cannot see a rejection from a promise it did not await.
-			if (!response) {
-				loading.set(false);
-				return;
-			}
-			try {
+			// This had no .catch at all, and loading.set(true) above it, so a failed
+			// explanation request left the overlay up forever: the enclosing try/catch
+			// cannot see a rejection from a promise it never awaited.
+			if (response) {
 				const data = await response;
 				if (!data.ok) throw new Error(`explanation request failed: HTTP ${data.status}`);
 				const features = await data.json();
@@ -181,12 +180,14 @@
 					map.getSource(PGAS_SOURCE)?.setData(features);
 					adjust_zoom(features, map);
 				}
-			} finally {
-				loading.set(false);
 			}
 		} catch (error) {
-			loading.set(false);
 			console.error('IndexExplanationLayer: explanation request failed', error);
+		} finally {
+			// Exactly one clear for the one ticket taken above. An inner finally *and*
+			// an outer catch would both fire on a throw and decrement twice, which with
+			// a concurrent request would clear that request's ticket instead.
+			loading.set(false);
 		}
 	}
 
@@ -196,6 +197,6 @@
 	}
 </script>
 
-{#if $current_cell && $current_cell.x != -1 && $current_cell != -1}
+{#if $current_cell && $current_cell.x != -1 && $current_cell.y != -1}
 	<ButtonMap title={'Deselect cell'} action={back} {map} icon={Exit} />
 {/if}

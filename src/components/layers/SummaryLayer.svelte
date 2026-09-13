@@ -130,7 +130,8 @@
 						'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
 						'text-justify': 'auto',
 						'text-size': 15,
-						'text-offset': [100, 0]
+						// Offsets are in ems: 100 put the label ~1,600px from its anchor.
+						'text-offset': [1, 0]
 					},
 					paint: {
 						'text-halo-width': 8,

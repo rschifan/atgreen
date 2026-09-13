@@ -1,11 +1,5 @@
 <script lang="ts">
-	import {
-		Button,
-		ComboBox,
-		ExpandableTile,
-		Tile,
-		ToastNotification
-	} from 'carbon-components-svelte';
+	import { ComboBox, ExpandableTile, Tile, ToastNotification } from 'carbon-components-svelte';
 	import { format, geoMercator, geoPath, max, min, scaleThreshold, select, selectAll } from 'd3';
 	import { ckmeans } from 'simple-statistics';
 	import { afterUpdate, onDestroy, onMount } from 'svelte';
@@ -13,17 +7,21 @@
 	import { get_city_accessibility_band } from '../js/api';
 	import type { TargetStoreImpl } from '../js/types';
 	import { current_city, loading } from '../stores/stores';
-	import { count_transictions, get_bucket, get_buckets, get_frequencies, sum_k } from '../js/stats';
+	import {
+		count_transictions,
+		get_buckets,
+		get_frequencies,
+		join_on_cell,
+		sum_k
+	} from '../js/stats';
 
-	let accessibility_indexes = [
-		{ id: 0, text: 'WHO' },
-		{ id: 1, text: 'BE2' },
-		{ id: 2, text: 'BE3' },
-		{ id: 3, text: 'NE1' },
-		{ id: 4, text: 'NE2' },
-		{ id: 5, text: 'IPP' },
-		{ id: 6, text: 'ESA' }
-	];
+	// This was a hardcoded list of seven that omitted BE1 entirely, so one of the
+	// eight published indexes could not be compared at all. /rpc/getindexes returns
+	// the real set; derive from it so adding an index server-side is enough.
+	$: accessibility_indexes = (metadata?.indexes() ?? []).map((text: string, id: number) => ({
+		id,
+		text
+	}));
 
 	const props = {
 		nbreaks: 4,
@@ -204,12 +202,6 @@
 			});
 	}
 
-	function get_values(data) {
-		return data.features?.map((obj) => {
-			return obj.properties.v;
-		});
-	}
-
 	function get_y(i: number, index: number, innerHeight: number): number {
 		const rate: number =
 			index == 0 ? sum_k(freqA, i) / valuesA.length : sum_k(freqB, i) / valuesB.length;
@@ -297,12 +289,19 @@
 	}
 
 	function draw(dataA, dataB) {
-		valuesA = get_values(dataA)?.filter((obj: number) => {
-			return obj >= 0;
-		});
-		valuesB = get_values(dataB)?.filter((obj: number) => {
-			return obj >= 0;
-		});
+		// The two value arrays used to be filtered independently and then zipped by
+		// position. Different indexes cover different numbers of cells (Turin: 3,755
+		// for WHO against 3,867 for BE3), so past the first divergence every pair
+		// compared two different places and the surplus was silently dropped. Join on
+		// the grid coordinates instead — features carry no stable id, only x/y/v.
+		const joined = join_on_cell(dataA?.features, dataB?.features);
+		valuesA = joined.map((d) => d.a);
+		valuesB = joined.map((d) => d.b);
+
+		if (valuesA.length === 0) {
+			flows = undefined;
+			return;
+		}
 
 		breaksA = ckmeans(valuesA, props.nbreaks).map((v) => {
 			return min(v);
@@ -618,7 +617,7 @@
 							stroke-width={props.stroke.width}
 							stroke={props.stroke.color}
 							on:mouseover={(d) => {
-								select_bucket(q, true);
+								select_bucket(q, false);
 							}}
 							on:mouseleave={(d) => {
 								unselect_bucket();
@@ -627,7 +626,7 @@
 						/>
 					{/each}
 				</g>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+				<g transform="translate({props.margins.left} {props.margins.top})" id="to_bucket_labels">
 					{#each Array(props.nbreaks + 1) as _, q (q)}
 						{@const innerWidth = columnWidth - 2 * props.margins.left}
 						<text
@@ -643,7 +642,7 @@
 						</text>
 					{/each}
 				</g>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+				<g transform="translate({props.margins.left} {props.margins.top})" id="to_bucket_names">
 					{#each Array(props.nbreaks) as _, q (q)}
 						{@const innerWidth = columnWidth - 2 * props.margins.left}
 						<text

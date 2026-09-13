@@ -404,6 +404,13 @@
 		let city = $current_city.text;
 
 		current_green_types_code = get_green_types_code(current_green_types);
+		// An empty green-type selection now yields undefined rather than silently
+		// meaning "all three". Refuse the request and say so, instead of sending
+		// green_code=undefined to the API.
+		if (current_green_types_code === undefined) {
+			empty_resultset_error = true;
+			return;
+		}
 
 		loading.set(true);
 
@@ -458,6 +465,10 @@
 	function handle_click_new_cell(payload) {
 		cell_id = payload.detail.cellid;
 		let green_types_code = get_green_types_code(current_green_types);
+		if (green_types_code === undefined) {
+			empty_resultset_error = true;
+			return;
+		}
 		let selected_cell_feature = payload.detail.feature;
 
 		add_selected_cell_layer(selected_cell_feature, reference_map);
@@ -520,12 +531,21 @@
 	}
 
 	function update_center(payload) {
-		if (new_map && new_map.getCenter() != payload.detail.center)
-			new_map?.setCenter(payload.detail.center);
+		// `getCenter() != payload.detail.center` compared two LngLat objects by
+		// identity, so it was always true and setCenter ran on every `move` event of
+		// the reference map. Compare the coordinates, with a tolerance below one
+		// rendered pixel at this zoom.
+		if (!new_map) return;
+		const to = payload.detail.center;
+		const at = new_map.getCenter();
+		if (Math.abs(at.lng - to.lng) > 1e-9 || Math.abs(at.lat - to.lat) > 1e-9) {
+			new_map.setCenter(to);
+		}
 	}
 
 	function update_zoom(payload) {
-		if (new_map && new_map.getZoom() != payload.detail.zoom) new_map?.setZoom(payload.detail.zoom);
+		if (new_map && Math.abs(new_map.getZoom() - payload.detail.zoom) > 1e-9)
+			new_map.setZoom(payload.detail.zoom);
 	}
 
 	function reset() {
@@ -559,7 +579,11 @@
 			label="Select green types"
 			items={green_types}
 			disabled={green_types_combobox_disabled}
-			on:select={() => {
+			on:select={(event) => {
+				// The handler used to drop event.detail.selectedIds, so this control
+				// cleared the map and then recomputed with the same green types it
+				// started with. Explore.svelte already did this correctly.
+				current_green_types = event.detail.selectedIds;
 				reset();
 			}}
 		/>
@@ -669,13 +693,16 @@
 			? '10px'
 			: '0px'};display: flex;flex-direction: column;visibility: {cell_id ? 'visible' : 'hidden'};"
 	>
+		<!--
+			DrawMap has no createEventDispatcher, so the on:update_center /
+			on:update_zoom handlers that used to be here never fired. The sync is
+			one-way by design: ReferenceMap (Before) drives DrawMap (After).
+		-->
 		<DrawMap
 			container="draw_new_map"
 			bind:ref={new_map}
 			bind:mapLoaded={newMapLoaded}
 			bind:styleLoaded={newMapStyleLoaded}
-			on:update_center={update_center}
-			on:update_zoom={update_zoom}
 		>
 			{#if new_data && new_data.features && new_data.features.length > 0}
 				<div class="map_header">
@@ -686,7 +713,7 @@
 				<BaseLegend
 					bind:index_type={current_index_type}
 					bind:threshold={current_target}
-					data={reference_data}
+					data={new_data}
 					width={innerWidth > 500 ? 400 : innerWidth / 2}
 				/>
 			{/if}
