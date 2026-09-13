@@ -97,13 +97,16 @@
 			});
 	}
 
+	// `immediate: true` fired a third request on mount, before either the city or the
+	// index was known - one request per city selection was being paid for three times
+	// (~827 KB each for Turin). The watcher now waits until both are resolved.
 	let accessibility_layer_request = useWatcher(
 		() =>
 			get_accessibility_layer($current_city?.text, metadata?.getBand($current_accessibility_index)),
 		[current_city, current_accessibility_index],
 		{
 			debounce: 500,
-			immediate: true
+			immediate: false
 		}
 	);
 

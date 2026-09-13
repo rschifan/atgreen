@@ -1,12 +1,8 @@
 <script lang="ts">
-	import { AlluvialChart } from '@carbon/charts-svelte';
-	import '@carbon/charts-svelte/styles.css';
 	import {
 		Button,
-		Column,
 		ComboBox,
 		ExpandableTile,
-		Row,
 		Tile,
 		ToastNotification
 	} from 'carbon-components-svelte';
@@ -53,7 +49,6 @@
 	let indexB: string;
 	let dataA: [];
 	let dataB: [];
-	let dataflows;
 
 	let u_left, u_right;
 	let colorScaleA, colorScaleB, scaleA, scaleB;
@@ -386,25 +381,6 @@
 		freqA = get_frequencies(bucketsA);
 		freqB = get_frequencies(bucketsB);
 		flows = count_transictions(bucketsA, bucketsB);
-
-		let nodes = [];
-		for (let index = 0; index < props.nbreaks; index++) {
-			nodes.push({ name: get_node_label(index, indexA), category: indexA });
-			nodes.push({ name: get_node_label(index, indexB), category: indexB });
-		}
-
-		dataflows = [];
-		Object.keys(flows).forEach((A) => {
-			Object.keys(flows[A]).forEach((B) => {
-				dataflows.push({
-					source: get_node_label(A, indexA),
-					target: get_node_label(B, indexB),
-					value: flows[A][B]
-				});
-			});
-		});
-
-		// options['alluvial']['nodes'] = nodes;
 	}
 
 	function unselect_bucket() {
@@ -738,17 +714,6 @@
 		</div>
 	</div>
 
-	<!-- <Row style="padding:0px;margin:0px">
-		<Column noGutterLeft noGutterRight>
-			<p style="text-align: center">Flows</p>
-		</Column>
-	</Row>
-
-	<Row style="max-width: 600px;margin:auto;padding-bottom:10px;">
-		<Column noGutterLeft noGutterRight>
-			<AlluvialChart toolbar="false" data={dataflows} {options} />
-		</Column>
-	</Row> -->
 {/if}
 
 <style>

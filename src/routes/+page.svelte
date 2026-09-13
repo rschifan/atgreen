@@ -213,13 +213,31 @@
 			<Tab label="Draw" />
 			<Tab label="Explore" />
 
+			<!--
+				Carbon renders every TabContent and hides the inactive ones, so all six
+				panels used to mount at once: five Mapbox instances (five WebGL contexts,
+				four of them invisible) plus a 2.8 MB green-areas fetch for the Explore
+				tab whether or not anyone opened it. Gate each panel on its own tab.
+			-->
 			<svelte:fragment slot="content">
-				<TabContent style="margin:0px;padding:0px;"><CitySelector bind:active {data} /></TabContent>
-				<TabContent class="tabcontent"><MeasureAccessibility {metadata} /></TabContent>
-				<TabContent><CompareAccessibilityIndexes {metadata} /></TabContent>
-				<TabContent><CreateAccessibilityIndex /></TabContent>
-				<TabContent><Draw {metadata} /></TabContent>
-				<TabContent><ExploreGreenAreas /></TabContent>
+				<TabContent style="margin:0px;padding:0px;">
+					{#if selectedTab === 0}<CitySelector bind:active {data} />{/if}
+				</TabContent>
+				<TabContent class="tabcontent">
+					{#if selectedTab === 1}<MeasureAccessibility {metadata} />{/if}
+				</TabContent>
+				<TabContent>
+					{#if selectedTab === 2}<CompareAccessibilityIndexes {metadata} />{/if}
+				</TabContent>
+				<TabContent>
+					{#if selectedTab === 3}<CreateAccessibilityIndex />{/if}
+				</TabContent>
+				<TabContent>
+					{#if selectedTab === 4}<Draw {metadata} />{/if}
+				</TabContent>
+				<TabContent>
+					{#if selectedTab === 5}<ExploreGreenAreas />{/if}
+				</TabContent>
 			</svelte:fragment>
 		</Tabs>
 	{:else}
