@@ -34,7 +34,7 @@ export function sum_k(array: number[], k: number): number {
 	if (k == 0) return 0;
 
 	let acc = 0;
-	for (let index = 0; index < k; index++) {
+	for (let index = 0; index <= k; index++) {
 		acc += array[index];
 	}
 	return acc;
