@@ -113,13 +113,19 @@
 		}
 	);
 
-	let last_requested_key: string | undefined = undefined;
+	// The de-duplication key lives on a plain object, not in a `let`. Svelte 5 tracks
+	// a variable that a reactive block both reads and writes as a dependency of
+	// itself and stops re-running the block, so the fetch silently never fired —
+	// the same symptom as the original `immediate: false` bug, from a different
+	// cause. Mutating a property of a non-reactive object keeps the bookkeeping out
+	// of the reactive graph entirely.
+	const requested = { key: undefined as string | undefined };
 	$: {
 		const _city = $current_city?.text;
 		const _band = metadata?.getBand($current_accessibility_index);
 		const _key = `${_city}|${_band}`;
-		if (_city && _band !== undefined && _key !== last_requested_key) {
-			last_requested_key = _key;
+		if (_city && _band !== undefined && _key !== requested.key) {
+			requested.key = _key;
 			accessibility_layer_request.send();
 		}
 	}
@@ -354,20 +360,20 @@
 		else target_predicate = value >= threshold;
 		target_string = target_predicate
 			? 'This cell <span style="font-weight:bold">does</span> meet the target for ' +
-			  $current_accessibility_index
+				$current_accessibility_index
 			: 'This cell <span style="font-weight:bold">does not </span> meet the target for ' +
-			  $current_accessibility_index +
-			  ' (' +
-			  value +
-			  ' ' +
-			  unit +
-			  ' ' +
-			  (type == AccessibilityIndexType.MINIMUM_DISTANCE ? '>' : '<') +
-			  ' ' +
-			  threshold +
-			  ' ' +
-			  unit +
-			  ')';
+				$current_accessibility_index +
+				' (' +
+				value +
+				' ' +
+				unit +
+				' ' +
+				(type == AccessibilityIndexType.MINIMUM_DISTANCE ? '>' : '<') +
+				' ' +
+				threshold +
+				' ' +
+				unit +
+				')';
 
 		return (
 			'<div style="color:black;padding:0px;margin:0px;"><p style="font-size:1em">' +

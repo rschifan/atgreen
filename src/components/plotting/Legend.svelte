@@ -116,8 +116,12 @@
 	let xTicksValueScale;
 	let threshold: number;
 
-	$: if (metadata) current = metadata.getTarget($current_accessibility_index).index;
-	$: if (metadata) threshold = metadata.getTarget($current_accessibility_index).threshold;
+	// `metadata.getTarget(x)` returns undefined for an index that is not loaded yet,
+	// and these ran before $current_accessibility_index was set. Svelte 4 happened to
+	// evaluate them late enough to hide it; Svelte 5 does not, which is a scheduling
+	// difference exposing a missing guard rather than a new bug.
+	$: current = metadata?.getTarget($current_accessibility_index)?.index;
+	$: threshold = metadata?.getTarget($current_accessibility_index)?.threshold;
 
 	$: n_steps = 40;
 	$: n_xticks = 4;

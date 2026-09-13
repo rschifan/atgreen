@@ -38,7 +38,7 @@
 
 <svelte:window bind:innerHeight={content_height} />
 
-<Header persistentHamburgerMenu={false} company="ATGreen" bind:isSideNavOpen>
+<Header persistentHamburgerMenu={false} companyName="ATGreen" bind:isSideNavOpen>
 	<svelte:fragment slot="skip-to-content">
 		<SkipToContent />
 	</svelte:fragment>

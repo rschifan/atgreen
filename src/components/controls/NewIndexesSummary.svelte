@@ -166,11 +166,13 @@
 				{/each}
 			</div>
 		</Row>
-		{#if metadata}
+		<!-- `{#if metadata}` was not enough: getTarget() returns undefined for an index
+		     that has not loaded yet, and .description on that throws. -->
+		{#if metadata?.getTarget($current_accessibility_index)}
 			<div class="description">
 				What does {$current_accessibility_index} measure? {metadata.getTarget(
 					$current_accessibility_index
-				).description}
+				)?.description}
 			</div>
 		{/if}
 

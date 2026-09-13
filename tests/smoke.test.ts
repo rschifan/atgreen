@@ -60,10 +60,11 @@ async function stubBackend(page: Page) {
 }
 
 async function selectTurin(page: Page) {
-	// Carbon's HeaderSearch renders a plain #search-input (no searchbox role) and
-	// exposes its results as role=menuitem inside a role=menu.
-	await page.locator('button[aria-label="Search"]').click();
-	await page.locator('#search-input').fill('Turin');
+	// Carbon's HeaderSearch input id is generated per instance (it was a stable
+	// #search-input before 0.112), so target the class instead; results are exposed
+	// as role=menuitem inside a role=menu.
+	await page.locator('button[aria-label="Search"]').first().click();
+	await page.locator('.bx--header__search-input').fill('Turin');
 	await page.getByRole('menuitem', { name: 'Turin' }).click();
 }
 
@@ -184,6 +185,10 @@ test.describe('ATGreen smoke', () => {
 		await page.goto('/');
 		await selectTurin(page);
 		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
+		// Wait for the first map to settle before driving tabs: the loading overlay can
+		// still cover the tab bar at the moment the tiles become visible.
+		await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 20000 });
+		await expect(page.locator('.bx--loading-overlay')).toHaveCount(0, { timeout: 20000 });
 
 		// Draw mounts two maps; leaving it must release both.
 		for (let i = 0; i < 2; i++) {
