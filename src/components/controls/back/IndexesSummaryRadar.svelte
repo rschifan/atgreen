@@ -8,6 +8,7 @@
 	import { RadarChart } from '@carbon/charts-svelte';
 	import '@carbon/charts/styles.css';
 
+	let unsubscribe_city_profile: Unsubscriber;
 	let unsubscribe_change_city_event: Unsubscriber;
 	let unsubscribe_change_accessibility_index_event: Unsubscriber;
 	let unsubscribe_accessibility_indexes_event: Unsubscriber;
@@ -25,6 +26,7 @@
 		if (unsubscribe_change_accessibility_index_event)
 			unsubscribe_change_accessibility_index_event();
 		if (unsubscribe_accessibility_indexes_event) unsubscribe_accessibility_indexes_event();
+		if (unsubscribe_city_profile) unsubscribe_city_profile();
 	});
 
 	let data;
@@ -33,7 +35,7 @@
 		if (!unsubscribe_change_city_event) subscribe_change_city_event();
 		if (!unsubscribe_change_accessibility_index_event) subscribe_change_accessibility_index_event();
 
-		get_city_profile_request.data.subscribe((value) => {
+		unsubscribe_city_profile = get_city_profile_request.data.subscribe((value) => {
 			if (value) {
 				data = [];
 				Object.entries(value).forEach((el) => {

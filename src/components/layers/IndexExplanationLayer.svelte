@@ -47,9 +47,15 @@
 
 		if (unsubscribe_current_cell_event) unsubscribe_current_cell_event();
 
-		map.removeLayer(PGAS_LABELS_LAYER);
-		map.removeLayer(PGAS_LAYER);
-		map.removeSource(PGAS_SOURCE);
+		// The parent map may already have been removed, after which these throw.
+		try {
+			for (const layer of [PGAS_LABELS_LAYER, PGAS_LAYER]) {
+				if (map?.getLayer(layer)) map.removeLayer(layer);
+			}
+			if (map?.getSource(PGAS_SOURCE)) map.removeSource(PGAS_SOURCE);
+		} catch {
+			/* map already destroyed */
+		}
 	});
 
 	function init() {

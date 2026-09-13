@@ -29,7 +29,7 @@
 
 	let width = 0;
 
-	let unsubscribe_current_city_event: Unsubscriber;
+	let unsubscribe_hovered_feature: Unsubscriber;
 
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
@@ -42,26 +42,16 @@
 		anchor: 'bottom'
 	}).setLngLat([0, 0]);
 
-	function subscribe_current_city_event() {
-		unsubscribe_current_city_event = current_city.subscribe(() => {});
-	}
-
 	onMount(() => {
 		console.log('ReferenceMap - mount');
-
-		subscribe_current_city_event();
-
-		hovered_feature.subscribe((feature) => {
-			if (feature) {
-			}
-		});
 
 		init();
 	});
 
 	onDestroy(() => {
-		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
-		console.log('ReferenceMap - destroy');
+		// See BaseMap: dropping the DOM node does not release the WebGL context.
+		map?.remove();
+		if (unsubscribe_hovered_feature) unsubscribe_hovered_feature();
 	});
 
 	function init() {

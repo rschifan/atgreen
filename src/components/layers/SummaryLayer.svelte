@@ -54,6 +54,7 @@
 	// }
 
 	let selected_feature = undefined;
+	let unsubscribe_current_city: (() => void) | undefined;
 
 	function move_center(center) {
 		map.flyTo({
@@ -267,7 +268,7 @@
 			hovered_accessibility_cell_id = cell_id;
 		});
 
-		current_city.subscribe((value) => {
+		unsubscribe_current_city = current_city.subscribe((value) => {
 			if (value) {
 				if (!map.getSource(SUMMARY_SOURCE)) return;
 
@@ -299,17 +300,23 @@
 	});
 
 	onDestroy(() => {
-		console.log('SummaryLayer - destroy');
+		if (unsubscribe_current_city) unsubscribe_current_city();
 
-		map.off('mousemove', SUMMARY_LAYER);
-		map.off('mouseleave', SUMMARY_LAYER);
-		map.off('mouseenter', SUMMARY_LAYER);
-		map.off('click', SUMMARY_LAYER);
-
-		map.removeLayer(SUMMARY_LAYER);
-		map.removeLayer(CITY_LABEL_LAYER);
-		map.removeLayer(SELECTED_CITY_LABEL_LAYER);
-		map.removeSource(SUMMARY_SOURCE);
+		// The parent map component may already have called map.remove(), after which
+		// every method below throws and takes the rest of the teardown with it. The
+		// map.off(type, layerId) calls that used to be here removed nothing anyway:
+		// Mapbox reads a two-argument off() as (type, listener), so a layer-id string
+		// matched no registered handler. map.remove() drops all of them at once.
+		try {
+			for (const layer of [SUMMARY_LAYER, CITY_LABEL_LAYER, SELECTED_CITY_LABEL_LAYER]) {
+				if (map?.getLayer(layer)) map.removeLayer(layer);
+			}
+			for (const source of [SUMMARY_SOURCE, SELECTED_CITY_SOURCE]) {
+				if (map?.getSource(source)) map.removeSource(source);
+			}
+		} catch {
+			/* map already destroyed */
+		}
 	});
 </script>
 

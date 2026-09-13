@@ -116,4 +116,55 @@ test.describe('ATGreen smoke', () => {
 		await page.getByRole('tab', { name: 'Explore' }).click();
 		await expect.poll(() => rpcCalls.filter((c) => c === 'queryosmgreen').length).toBe(1);
 	});
+	test('maps are torn down when their tab closes', async ({ page }) => {
+		// Counting .mapboxgl-map nodes does NOT test this: Svelte removes the DOM node
+		// whether or not map.remove() ran, so that assertion passes even with the
+		// teardown deleted (verified). What leaks is the WebGL context, which is
+		// invisible in the DOM.
+		//
+		// mapbox-gl's remove() releases the context via WEBGL_lose_context, which
+		// fires `webglcontextlost` on the canvas. Counting those events tests the
+		// mechanism rather than its shadow.
+		await page.addInitScript(() => {
+			(window as unknown as { __ctxLost: number }).__ctxLost = 0;
+			const getContext = HTMLCanvasElement.prototype.getContext;
+			HTMLCanvasElement.prototype.getContext = function (
+				this: HTMLCanvasElement,
+				...args: unknown[]
+			) {
+				const ctx = (getContext as (...a: unknown[]) => unknown).apply(this, args);
+				if (ctx && String(args[0]).startsWith('webgl')) {
+					this.addEventListener('webglcontextlost', () => {
+						(window as unknown as { __ctxLost: number }).__ctxLost++;
+					});
+				}
+				return ctx;
+			} as typeof HTMLCanvasElement.prototype.getContext;
+		});
+
+		await stubBackend(page);
+		const consoleErrors: string[] = [];
+		page.on('console', (m) => m.type() === 'error' && consoleErrors.push(m.text()));
+
+		await page.goto('/');
+		await selectTurin(page);
+		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
+
+		// Draw mounts two maps; leaving it must release both.
+		for (let i = 0; i < 2; i++) {
+			await page.getByRole('tab', { name: 'Draw' }).click();
+			await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 15000 });
+			await page.getByRole('tab', { name: 'Measure' }).click();
+			await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 15000 });
+		}
+
+		const lost = await page.evaluate(() => (window as unknown as { __ctxLost: number }).__ctxLost);
+		// Two Draw visits plus the Measure map torn down on the way in and out: at
+		// minimum the four Draw contexts must have been released.
+		expect(lost, `webgl contexts released: ${lost}`).toBeGreaterThanOrEqual(4);
+
+		// Teardown that throws is the other failure mode: a layer removed after its
+		// map is gone raises, and that surfaces in the console.
+		expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toHaveLength(0);
+	});
 });

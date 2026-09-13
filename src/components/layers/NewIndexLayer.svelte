@@ -178,13 +178,17 @@
 	onDestroy(() => {
 		console.log('NewIndexLayer - destroy');
 
-		map.off('mousemove', NEW_INDEX_LAYER);
-		map.off('mouseleave', NEW_INDEX_LAYER);
-		map.off('mouseenter', NEW_INDEX_LAYER);
-		map.off('click', NEW_INDEX_LAYER);
-
-		if (map.getLayer(NEW_INDEX_LAYER)) map.removeLayer(NEW_INDEX_LAYER);
-		if (map.getSource(NEW_INDEX_SOURCE)) map.removeSource(NEW_INDEX_SOURCE);
+		// The parent map component may already have called map.remove(), after which
+		// every method below throws and takes the rest of the teardown with it. The
+		// map.off(type, layerId) calls that used to be here removed nothing anyway:
+		// Mapbox reads a two-argument off() as (type, listener), so a layer-id string
+		// matched no registered handler. map.remove() drops all of them at once.
+		try {
+			if (map?.getLayer(NEW_INDEX_LAYER)) map.removeLayer(NEW_INDEX_LAYER);
+			if (map?.getSource(NEW_INDEX_SOURCE)) map.removeSource(NEW_INDEX_SOURCE);
+		} catch {
+			/* map already destroyed */
+		}
 	});
 
 	function setVisibilityLayer() {

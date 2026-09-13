@@ -23,7 +23,6 @@
 	let selected_feature: object | undefined = undefined;
 	let width = 0;
 
-	let unsubscribe_current_city_event: Unsubscriber;
 	const GREENAREAS_SOURCE = 'GREENAREAS_SOURCE';
 	const GREENAREAS_LAYER = 'GREENAREAS_LAYER';
 	const GREENAREAS_LABELS_LAYER = 'GREENAREAS_LABELS_LAYER';
@@ -82,10 +81,6 @@
 		}
 	}
 
-	function subscribe_current_city_event() {
-		unsubscribe_current_city_event = current_city.subscribe(() => {});
-	}
-
 	function filter_by_size(minv: number) {
 		if (map && map.getLayer(GREENAREAS_LAYER))
 			map.setFilter(GREENAREAS_LAYER, ['>=', ['get', 'size'], minv]);
@@ -115,13 +110,16 @@
 
 	onMount(() => {
 		console.log('BaseMap - mount');
-		subscribe_current_city_event();
 		init();
 	});
 
 	onDestroy(() => {
-		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
-		console.log('BaseMap - destroy');
+		// Mapbox holds a WebGL context, tile workers and XHR queues; none of it is
+		// released by dropping the DOM node. Browsers cap simultaneous contexts and
+		// silently kill the oldest, which surfaces later as a blank map far from the
+		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
+		// this matters more than when all six lived for the page's lifetime.
+		map?.remove();
 	});
 
 	afterUpdate(() => {

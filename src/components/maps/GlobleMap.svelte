@@ -7,7 +7,14 @@
 		init();
 	});
 
-	onDestroy(() => {});
+	onDestroy(() => {
+		// Mapbox holds a WebGL context, tile workers and XHR queues; none of it is
+		// released by dropping the DOM node. Browsers cap simultaneous contexts and
+		// silently kill the oldest, which surfaces later as a blank map far from the
+		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
+		// this matters more than when all six lived for the page's lifetime.
+		map?.remove();
+	});
 
 	let map: mapbox.Map;
 

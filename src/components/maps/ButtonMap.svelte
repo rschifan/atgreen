@@ -26,7 +26,13 @@
 	});
 
 	onDestroy(() => {
-		map.removeControl(button);
+		// The parent map may already have been removed, in which case removeControl
+		// throws and takes the rest of the teardown with it.
+		try {
+			if (button) map?.removeControl(button);
+		} catch {
+			/* map already destroyed */
+		}
 	});
 </script>
 

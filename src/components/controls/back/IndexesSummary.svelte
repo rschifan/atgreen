@@ -62,6 +62,7 @@
 			hovered_index;
 	}
 
+	let unsubscribe_city_profile: Unsubscriber;
 	let unsubscribe_change_city_event: Unsubscriber;
 	let unsubscribe_change_accessibility_index_event: Unsubscriber;
 	let unsubscribe_accessibility_indexes_event: Unsubscriber;
@@ -71,6 +72,7 @@
 		if (unsubscribe_change_accessibility_index_event)
 			unsubscribe_change_accessibility_index_event();
 		if (unsubscribe_accessibility_indexes_event) unsubscribe_accessibility_indexes_event();
+		if (unsubscribe_city_profile) unsubscribe_city_profile();
 	});
 
 	let store;
@@ -81,7 +83,7 @@
 		// 	data = value;
 		// });
 
-		get_city_profile_request.data.subscribe((value) => {
+		unsubscribe_city_profile = get_city_profile_request.data.subscribe((value) => {
 			if (value) {
 				data = new CityStoreImpl($current_city);
 

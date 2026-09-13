@@ -124,7 +124,6 @@
 		}
 	}
 
-	let unsubscribe_current_city_event: Unsubscriber;
 	let unsubscribe_current_accessibility_index_event: Unsubscriber;
 	let unsubscribe_accessibility_layer_request_event: Unsubscriber;
 	let unsubscribe_current_cell_event: Unsubscriber;
@@ -168,7 +167,6 @@
 				if ($current_accessibility_index_data) adjust_zoom($current_accessibility_index_data, map);
 			}
 		});
-		unsubscribe_current_city_event = current_city.subscribe((value) => {});
 		unsubscribe_current_accessibility_index_event = current_accessibility_index.subscribe(
 			(value) => {}
 		);
@@ -279,20 +277,24 @@
 	onDestroy(() => {
 		console.log('AccessibilityLayer - destroy');
 
-		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
 		if (unsubscribe_accessibility_layer_request_event)
 			unsubscribe_accessibility_layer_request_event();
 		if (unsubscribe_current_accessibility_index_event)
 			unsubscribe_current_accessibility_index_event();
 		if (unsubscribe_current_cell_event) unsubscribe_current_cell_event();
 
-		map.off('mousemove', ACCESSIBILITY_INDEX_LAYER);
-		map.off('mouseleave', ACCESSIBILITY_INDEX_LAYER);
-		map.off('mouseenter', ACCESSIBILITY_INDEX_LAYER);
-		map.off('click', ACCESSIBILITY_INDEX_LAYER);
-
-		map.removeLayer(ACCESSIBILITY_INDEX_LAYER);
-		map.removeSource(ACCESSIBILITY_INDEX_SOURCE);
+		// The parent map component may already have called map.remove(), after which
+		// every method below throws and takes the rest of the teardown with it. The
+		// map.off(type, layerId) calls that used to be here removed nothing anyway:
+		// Mapbox reads a two-argument off() as (type, listener), so a layer-id string
+		// matched no registered handler. map.remove() drops all of them at once.
+		try {
+			popup?.remove();
+			if (map?.getLayer(ACCESSIBILITY_INDEX_LAYER)) map.removeLayer(ACCESSIBILITY_INDEX_LAYER);
+			if (map?.getSource(ACCESSIBILITY_INDEX_SOURCE)) map.removeSource(ACCESSIBILITY_INDEX_SOURCE);
+		} catch {
+			/* map already destroyed */
+		}
 
 		current_accessibility_index_data.set(undefined);
 	});

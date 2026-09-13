@@ -15,6 +15,7 @@
 	afterUpdate(() => {});
 
 	onDestroy(() => {
+		if (unsubscribe_accessibility_index) unsubscribe_accessibility_index();
 		if (unsubscibe_accessibility_data_layer_event) unsubscibe_accessibility_data_layer_event();
 	});
 
@@ -51,7 +52,7 @@
 			}
 		);
 
-		current_accessibility_index.subscribe((value) => {
+		unsubscribe_accessibility_index = current_accessibility_index.subscribe((value) => {
 			if (value) {
 				loading = true;
 			}
@@ -66,6 +67,7 @@
 	}
 
 	let loading = false;
+	let unsubscribe_accessibility_index: (() => void) | undefined;
 	let minv: number;
 	let maxv: number;
 	let offset: number;

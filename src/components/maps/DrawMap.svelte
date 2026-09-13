@@ -15,16 +15,18 @@
 
 	let width = 0;
 
-	let unsubscribe_current_city_event: Unsubscriber;
-
 	onMount(() => {
 		console.log('DrawMap - mount');
 		init();
 	});
 
 	onDestroy(() => {
-		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
-		console.log('DrawMap - destroy');
+		// Mapbox holds a WebGL context, tile workers and XHR queues; none of it is
+		// released by dropping the DOM node. Browsers cap simultaneous contexts and
+		// silently kill the oldest, which surfaces later as a blank map far from the
+		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
+		// this matters more than when all six lived for the page's lifetime.
+		map?.remove();
 	});
 
 	function init() {
