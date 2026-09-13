@@ -97,9 +97,12 @@
 			});
 	}
 
-	// `immediate: true` fired a third request on mount, before either the city or the
-	// index was known - one request per city selection was being paid for three times
-	// (~827 KB each for Turin). The watcher now waits until both are resolved.
+	// `immediate: true` fired a request on mount before either the city or the index was
+	// known, so one city selection was paid for three times (~827 KB each for Turin).
+	// `immediate: false` alone is not enough either: this component now mounts only once
+	// its tab is opened, by which point both stores are already populated and neither
+	// fires again - so nothing would ever trigger the fetch. Drive it explicitly instead,
+	// keyed on (city, band) so a repeat of the same pair is not re-requested.
 	let accessibility_layer_request = useWatcher(
 		() =>
 			get_accessibility_layer($current_city?.text, metadata?.getBand($current_accessibility_index)),
@@ -109,6 +112,17 @@
 			immediate: false
 		}
 	);
+
+	let last_requested_key: string | undefined = undefined;
+	$: {
+		const _city = $current_city?.text;
+		const _band = metadata?.getBand($current_accessibility_index);
+		const _key = `${_city}|${_band}`;
+		if (_city && _band !== undefined && _key !== last_requested_key) {
+			last_requested_key = _key;
+			accessibility_layer_request.send();
+		}
+	}
 
 	let unsubscribe_current_city_event: Unsubscriber;
 	let unsubscribe_current_accessibility_index_event: Unsubscriber;
