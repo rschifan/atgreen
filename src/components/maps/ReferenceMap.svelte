@@ -1,0 +1,200 @@
+<script lang="ts">
+	import 'mapbox-gl/dist/mapbox-gl.css';
+	import { createEventDispatcher, onDestroy, onMount, setContext } from 'svelte';
+	import type { Unsubscriber } from 'svelte/store';
+	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
+	import { current_city, hovered_feature } from '../../stores/stores.js';
+
+	const dispatch = createEventDispatcher();
+
+	function click_on_cell(feature: object) {
+		dispatch('new_green_cell', { cellid: feature.properties.id, feature: feature });
+	}
+
+	function update_center(center: []) {
+		dispatch('update_center', { center: center });
+	}
+
+	function update_zoom(current: number) {
+		dispatch('update_zoom', { zoom: current });
+	}
+
+	let map: mapbox.Map;
+
+	export let mapLoaded: boolean = false;
+	export let styleLoaded: boolean = false;
+	export let height: number = 500;
+	export let container: string;
+	export let ref: object;
+
+	let width: number = 0;
+
+	let unsubscribe_current_city_event: Unsubscriber;
+
+	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
+	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
+
+	let hovered_accessibility_cell_id: number = 0;
+
+	const popup = new mapbox.Popup({
+		closeButton: false,
+		closeOnClick: false,
+		anchor: 'bottom'
+	}).setLngLat([0, 0]);
+
+	function subscribe_current_city_event() {
+		unsubscribe_current_city_event = current_city.subscribe(() => {});
+	}
+
+	onMount(() => {
+		console.log('ReferenceMap - mount');
+
+		subscribe_current_city_event();
+
+		hovered_feature.subscribe((feature) => {
+			if (feature) {
+			}
+		});
+
+		init();
+	});
+
+	onDestroy(() => {
+		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
+		console.log('ReferenceMap - destroy');
+	});
+
+	function init() {
+		map = new mapbox.Map(
+			get_default_map_props(container, $current_city.feature.geometry.coordinates)
+		);
+
+		map.on('style.load', () => {
+			styleLoaded = true;
+		});
+
+		map.on('idle', () => {
+			update_center(map.getCenter());
+			update_zoom(map.getZoom());
+		});
+
+		map.on('load', async () => {
+			mapLoaded = true;
+
+			if (!map) return;
+
+			map.on('move', () => {
+				update_center(map.getCenter());
+			});
+
+			map.on('zoom', () => {
+				update_zoom(map.getZoom());
+			});
+
+			map.on('mouseenter', ACCESSIBILITY_LAYER, (e: mapbox.MapMouseEvent) => {
+				if (!e.features || e.features.length <= 0) return;
+
+				map.getCanvas().style.cursor = 'pointer';
+				let current_feature = e.features[0];
+				let cell_id = current_feature.id;
+
+				// update_popup(current_feature);
+
+				if (hovered_accessibility_cell_id && hovered_accessibility_cell_id != 0) {
+					map.setFeatureState(
+						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
+						{ hover: false }
+					);
+				}
+
+				map.setFeatureState({ source: ACCESSIBILITY_SOURCE, id: cell_id }, { hover: true });
+				hovered_accessibility_cell_id = cell_id;
+
+				// update_popup(current_feature);
+				if (
+					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
+					!$hovered_feature
+				)
+					hovered_feature.set(current_feature);
+			});
+
+			map.on('mouseleave', () => {
+				map.getCanvas().style.cursor = '';
+
+				popup.remove();
+
+				if (map && map.getSource(ACCESSIBILITY_SOURCE))
+					map.setFeatureState(
+						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
+						{ hover: false }
+					);
+				hovered_accessibility_cell_id = 0;
+				hovered_feature.set(null);
+			});
+
+			map.on('mousemove', ACCESSIBILITY_LAYER, (e: mapbox.MapMouseEvent) => {
+				if (!e.features || e.features.length <= 0) return;
+
+				map.getCanvas().style.cursor = 'pointer';
+
+				let current_feature = e.features[0];
+				let cell_id = current_feature.id;
+
+				// update_popup(current_feature);
+				if (
+					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
+					!$hovered_feature
+				)
+					hovered_feature.set(current_feature);
+
+				if (hovered_accessibility_cell_id != 0) {
+					map.setFeatureState(
+						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
+						{ hover: false }
+					);
+				}
+				// if (current_feature.properties.v != 0) {
+
+				map.setFeatureState({ source: ACCESSIBILITY_SOURCE, id: cell_id }, { hover: true });
+				hovered_accessibility_cell_id = cell_id;
+				// } else map.getCanvas().style.cursor = '';
+
+				// update_popup(current_feature);
+				if (
+					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
+					!$hovered_feature
+				)
+					hovered_feature.set(current_feature);
+			});
+
+			map.on('click', ACCESSIBILITY_LAYER, (e) => {
+				if (e.features && e.features.length > 0) {
+					// popup?.remove();
+
+					let current_feature = e.features[0];
+
+					click_on_cell(current_feature);
+				}
+			});
+		});
+
+		ref = map;
+	}
+
+	setContext(key, {
+		getMap: () => map
+	});
+
+	$: if (width && height && map) map.resize();
+</script>
+
+<div bind:clientWidth={width} style="flex: 1 1 auto;height:{height}px;">
+	<div id={container} bind:clientWidth={width} style="height: 100%;" />
+
+	{#if map}
+		<slot />
+	{/if}
+</div>
+
+<style>
+</style>

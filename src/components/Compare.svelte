@@ -1,0 +1,800 @@
+<script lang="ts">
+	import { AlluvialChart } from '@carbon/charts-svelte';
+	import '@carbon/charts-svelte/styles.css';
+	import {
+		Button,
+		Column,
+		ComboBox,
+		ExpandableTile,
+		Row,
+		Tile,
+		ToastNotification
+	} from 'carbon-components-svelte';
+	import { format, geoMercator, geoPath, max, min, scaleThreshold, select, selectAll } from 'd3';
+	import { ckmeans } from 'simple-statistics';
+	import { afterUpdate, onDestroy, onMount } from 'svelte';
+	import type { Unsubscriber } from 'svelte/store';
+	import { get_city_accessibility_band } from '../js/api';
+	import type { TargetStoreImpl } from '../js/types';
+	import { current_city, loading } from '../stores/stores';
+
+	let accessibility_indexes = [
+		{ id: 0, text: 'WHO' },
+		{ id: 1, text: 'BE2' },
+		{ id: 2, text: 'BE3' },
+		{ id: 3, text: 'NE1' },
+		{ id: 4, text: 'NE2' },
+		{ id: 5, text: 'IPP' },
+		{ id: 6, text: 'ESA' }
+	];
+
+	const props = {
+		nbreaks: 4,
+		margins: { left: 20, top: 10, bottom: 10 },
+		stroke: { width: 2, color: 'black' },
+		fill: { color: 'darkgrey' },
+		lines: { stroke: 2, color: 'rgba(200,200,200,100)' },
+		rectangles: { width: 10 },
+		labels: { size: '0.7em', padding: 5, color: 'darkgrey' },
+		map: { height: 400 }
+	};
+
+	let selectedIdA: number = 0;
+	let selectedIdB: number = 1;
+	let colors = ['#bae4b3', '#74c476', '#31a354', '#006d2c'];
+
+	let bucketsA: number[], bucketsB: number[];
+	let breaksA: number[], breaksB: number[];
+	let valuesA: number[], valuesB: number[];
+	let freqA: number[], freqB: number[];
+	let flows: {};
+
+	let indexA: string;
+	let indexB: string;
+	let dataA: [];
+	let dataB: [];
+	let dataflows;
+
+	let u_left, u_right;
+	let colorScaleA, colorScaleB, scaleA, scaleB;
+
+	let maps_ids = ['#left g.map', '#right g.map'];
+	let selected_cell_color = 'rgba(254, 95, 85, 0.5)';
+
+	let height: number = props.map.height;
+	let columnWidth: number;
+
+	let unsubscribe_current_city_event: Unsubscriber;
+	let innerHeight: number;
+	let innerWidth: number;
+
+	$: {
+		columnWidth = innerWidth < 500 ? innerWidth - 2 * props.margins.left : innerWidth / 2;
+		height = columnWidth < height ? columnWidth : props.map.height;
+	}
+	export let metadata: TargetStoreImpl;
+
+	function subscribe_current_city_event() {
+		unsubscribe_current_city_event = current_city.subscribe((value) => {
+			if (value) update();
+		});
+	}
+
+	function select_flow(from: number, to: number) {
+		let lines = selectAll('line');
+		let from_rects = selectAll('#from_buckets > rect');
+		let to_rects = selectAll('#to_buckets > rect');
+		lines.classed('low-opacity', true);
+		from_rects.classed('low-opacity', true);
+		to_rects.classed('low-opacity', true);
+
+		from_rects
+			?.filter(function () {
+				return this.getAttribute('q') == from;
+			})
+			.classed('selected', true)
+			.classed('low-opacity', false);
+
+		to_rects
+			?.filter(function () {
+				return this.getAttribute('q') == to;
+			})
+			.classed('selected', true)
+			.classed('low-opacity', false);
+		// lines
+		// 	.filter(function () {
+		// 		return this.getAttribute('from') == from && this.getAttribute('to') == to;
+		// 	})
+		// 	.classed('selected', true)
+		// 	.classed('low-opacity', false);
+	}
+
+	function select_cell(x: number, y: number): boolean {
+		let flow = [];
+
+		maps_ids.forEach((current, i) => {
+			let cell = select(current)
+				.selectAll('path')
+				.filter(function (d) {
+					if (!d) return false;
+					return d.properties.x == x && d.properties.y == y;
+				});
+
+			if (cell.empty()) return false;
+
+			cell.attr('fill', selected_cell_color);
+			flow[i] = cell.attr('q');
+		});
+
+		select_flow(flow[0], flow[1]);
+
+		return true;
+	}
+
+	function unselect_cell(x: number, y: number) {
+		maps_ids.forEach((current, i) => {
+			select(current)
+				.selectAll('path')
+				.filter(function (d) {
+					return d.properties.x == x && d.properties.y == y;
+				})
+				.attr('fill', (d) => {
+					return i == 0 ? colorScaleA(d.properties.v) : colorScaleB(d.properties.v);
+				});
+		});
+		unselect_bucket();
+	}
+
+	function draw_maps(dataA, dataB) {
+		select('#left g.map').selectChildren().remove();
+		select('#right g.map').selectChildren().remove();
+
+		let projectionA = geoMercator();
+		let projectionB = geoMercator();
+
+		projectionA.fitExtent(
+			[
+				[0, 0],
+				[columnWidth, height]
+			],
+			dataA
+		);
+		projectionB.fitExtent(
+			[
+				[0, 0],
+				[columnWidth, height]
+			],
+			dataB
+		);
+
+		u_left = select('#left g.map').selectAll('path').data(dataA.features);
+		u_left
+			.enter()
+			.append('path')
+			.attr('d', geoPath().projection(projectionA))
+			.attr('fill', (d) => {
+				return colorScaleA(d.properties.v);
+			})
+			.attr('stroke-width', 0)
+			.attr('q', (d) => {
+				return scaleA(d.properties.v);
+			})
+			.on('mouseover', (e, datum) => {
+				select_cell(datum.properties.x, datum.properties.y);
+			})
+			.on('mouseout', (e, datum) => {
+				unselect_cell(datum.properties.x, datum.properties.y);
+			});
+
+		u_right = select('#right g.map').selectAll('path').data(dataB.features);
+
+		u_right
+			.enter()
+			.append('path')
+			.attr('d', geoPath().projection(projectionB))
+			.attr('fill', (d) => {
+				return colorScaleB(d.properties.v);
+			})
+			// .attr('stroke', '#000')
+			.attr('stroke-width', 0)
+			.attr('q', (d) => {
+				return scaleB(d.properties.v);
+			})
+			.on('mouseover', (e, datum) => {
+				select_cell(datum.properties.x, datum.properties.y);
+			})
+			.on('mouseout', (e, datum) => {
+				unselect_cell(datum.properties.x, datum.properties.y);
+			});
+	}
+
+	function count_transictions(arr1: number[], arr2: number[]) {
+		let flows: {} = {};
+
+		if (arr1 && arr2) {
+			for (let i = 0; i < arr1.length; i++) {
+				const v1: number = arr1[i];
+				const v2: number = arr2[i];
+
+				if (v1 >= 0 && v2 >= 0)
+					if (!(v1 in flows)) {
+						flows[v1] = {};
+						flows[v1][v2] = 1;
+					} else {
+						if (!(v2 in flows[v1])) flows[v1][v2] = 1;
+						else flows[v1][v2] += 1;
+					}
+			}
+		}
+
+		return flows;
+	}
+
+	function get_buckets(values: number[], breaks: number[]): number[] {
+		return values.map((v: number) => {
+			return get_bucket(v, breaks);
+		});
+	}
+	function get_bucket(v: number, breaks: number[]): number {
+		for (let i: number = 0; i < breaks.length - 1; i++) {
+			if (v <= breaks[i + 1]) return i;
+		}
+		return 0;
+	}
+
+	function get_frequencies(array: number[]): number[] {
+		let frequencies: number[] = new Array(props.nbreaks + 1).fill(0);
+		array.forEach((element) => {
+			frequencies[element] += 1;
+		});
+		return frequencies;
+	}
+
+	function get_values(data) {
+		return data.features?.map((obj) => {
+			return obj.properties.v;
+		});
+	}
+
+	function sum_k(array: number[], k: number): number {
+		if (k == 0) return 0;
+
+		let acc: number = 0;
+		for (let index = 0; index < k; index++) {
+			acc += array[index];
+		}
+		return acc;
+	}
+
+	function get_y(i: number, index: number, innerHeight: number): number {
+		const rate: number =
+			index == 0 ? sum_k(freqA, i) / valuesA.length : sum_k(freqB, i) / valuesB.length;
+		return innerHeight * rate;
+	}
+
+	function get_x(i: number, index: number, innerWidth: number): number {
+		const rate: number =
+			index == 0 ? sum_k(freqA, i) / valuesA.length : sum_k(freqB, i) / valuesB.length;
+
+		return innerWidth * rate;
+	}
+
+	function get_width(i: number, index: number, innerWidth: number): number {
+		const rate: number = index == 0 ? freqA[i] / valuesA.length : freqB[i] / valuesB.length;
+		return innerWidth * rate;
+	}
+
+	let same_index: boolean = false;
+	async function update() {
+		if (selectedIdA >= 0 && selectedIdB >= 0) {
+			if (selectedIdA == selectedIdB) {
+				same_index = true;
+			} else {
+				same_index = false;
+				indexA = accessibility_indexes?.filter((obj) => {
+					return obj.id == selectedIdA;
+				})[0]?.text;
+				indexB = accessibility_indexes?.filter((obj) => {
+					return obj.id == selectedIdB;
+				})[0]?.text;
+
+				if ($current_city && indexA && indexB && indexA != indexB) {
+					dataA = undefined;
+					dataB = undefined;
+
+					select('#left g.map').selectChildren().remove();
+					select('#right g.map').selectChildren().remove();
+
+					let bandA: number, bandB: number;
+
+					let _indexA = metadata?.getTarget(indexA).index.band;
+					let _indexB = metadata?.getTarget(indexB).index.band;
+
+					if (_indexA >= 0 && _indexB >= 0) {
+						loading.set(true);
+						bandA = _indexA;
+						bandB = _indexB;
+
+						Promise.all<{}>([
+							get_city_accessibility_band($current_city.text, bandA),
+							get_city_accessibility_band($current_city.text, bandB)
+						])
+							.then(([dA, dB]) => {
+								Promise.all<{}>([dA.json(), dB.json()]).then(([d_jsonA, d_jsonB]) => {
+									dataA = d_jsonA;
+									dataB = d_jsonB;
+									if (
+										dataA &&
+										dataA.features &&
+										dataA.features.length > 0 &&
+										dataB &&
+										dataB.features &&
+										dataB.features.length > 0
+									)
+										draw(dataA, dataB);
+								});
+							})
+							.catch((error) => {
+								console.log('compare - update - error', error);
+							})
+							.finally(() => {
+								loading.set(false);
+							});
+					}
+				}
+			}
+		} else
+			console.log(
+				'Make sure to have selected a city and the two indexes!',
+				$current_city,
+				indexA,
+				indexB
+			);
+	}
+
+	function draw(dataA, dataB) {
+		valuesA = get_values(dataA)?.filter((obj: number) => {
+			return obj >= 0;
+		});
+		valuesB = get_values(dataB)?.filter((obj: number) => {
+			return obj >= 0;
+		});
+
+		breaksA = ckmeans(valuesA, props.nbreaks).map((v) => {
+			return min(v);
+		});
+		breaksA.push(max(valuesA));
+
+		breaksB = ckmeans(valuesB, props.nbreaks).map((v) => {
+			return min(v);
+		});
+		breaksB.push(max(valuesB));
+
+		colorScaleA = scaleThreshold().domain(breaksA.slice(1)).range(colors);
+		colorScaleB = scaleThreshold().domain(breaksB.slice(1)).range(colors);
+
+		scaleA = scaleThreshold()
+			.domain(breaksA.slice(1))
+			.range(Array.from({ length: props.nbreaks }, (_, index) => index));
+		scaleB = scaleThreshold()
+			.domain(breaksB.slice(1))
+			.range(Array.from({ length: props.nbreaks }, (_, index) => index));
+
+		bucketsA = get_buckets(valuesA, breaksA);
+		bucketsB = get_buckets(valuesB, breaksB);
+
+		freqA = get_frequencies(bucketsA);
+		freqB = get_frequencies(bucketsB);
+		flows = count_transictions(bucketsA, bucketsB);
+
+		let nodes = [];
+		for (let index = 0; index < props.nbreaks; index++) {
+			nodes.push({ name: get_node_label(index, indexA), category: indexA });
+			nodes.push({ name: get_node_label(index, indexB), category: indexB });
+		}
+
+		dataflows = [];
+		Object.keys(flows).forEach((A) => {
+			Object.keys(flows[A]).forEach((B) => {
+				dataflows.push({
+					source: get_node_label(A, indexA),
+					target: get_node_label(B, indexB),
+					value: flows[A][B]
+				});
+			});
+		});
+
+		// options['alluvial']['nodes'] = nodes;
+	}
+
+	function unselect_bucket() {
+		selectAll('line').classed('selected', false).classed('low-opacity', false);
+		selectAll('rect').classed('selected', false).classed('low-opacity', false);
+		selectAll('path').classed('selected', false).classed('low-opacity', false);
+	}
+
+	function select_bucket(q: number, from: boolean) {
+		const attr: string = from ? 'from' : 'to';
+
+		let lines = selectAll('line');
+		let from_rects = selectAll('#from_buckets > rect');
+		let to_rects = selectAll('#to_buckets > rect');
+		let to_clause = from ? to_rects : from_rects;
+		let from_clause = from ? from_rects : to_rects;
+		let targets = new Set();
+
+		lines.classed('low-opacity', true);
+		from_rects.classed('low-opacity', true);
+		to_rects.classed('low-opacity', true);
+
+		// if (from)
+		// 	targets = new Set(
+		// 		Object.entries(flows[q]).map((obj) => {
+		// 			return obj[0];
+		// 		})
+		// 	);
+		// else {
+		// 	Object.entries(flows).forEach((current) => {
+		// 		if (q in current[1]) targets.add(current[0]);
+		// 	});
+		// }
+
+		from_clause
+			?.filter(function () {
+				return this.getAttribute('q') == q;
+			})
+			.classed('selected', true)
+			.classed('low-opacity', false);
+
+		to_clause
+			?.filter(function () {
+				// return targets.has(this.getAttribute('q'));
+				return this.getAttribute('q') == q;
+			})
+			.classed('selected', true)
+			.classed('low-opacity', false);
+
+		// Select flows
+		lines
+			?.filter(function () {
+				return this.getAttribute(attr) == q;
+			})
+			.classed('selected', true)
+			.classed('low-opacity', false);
+
+		selectAll('path')
+			.filter(function () {
+				return this.getAttribute('q') == q;
+			})
+			.classed('selected', true);
+	}
+
+	afterUpdate(() => {
+		if (dataA && dataB) draw_maps(dataA, dataB);
+	});
+
+	onMount(() => {
+		subscribe_current_city_event();
+	});
+
+	onDestroy(() => {
+		if (unsubscribe_current_city_event) unsubscribe_current_city_event();
+	});
+
+	// let options = {
+	// 	toolbar: { enabled: false },
+	// 	getStrokeColor: (group) => {
+	// 		return 'white';
+	// 	},
+	// 	getFillColor: (group) => {
+	// 		return colors[group.substring(1)[0]];
+	// 	},
+	// 	title: '',
+	// 	alluvial: { nodePadding: 0, nodeAlignment: 'center' },
+	// 	height: '400px'
+	// };
+
+	function get_node_label(i: number, index: string) {
+		if (index) return `G${i} - ${index}`;
+		return `G${i}`;
+	}
+</script>
+
+<!-- <div>
+	<ExpandableTile tileExpandedLabel="less" tileCollapsedLabel="more">
+		<div slot="above">
+			<h3><h3>Compare</h3></h3>
+			<p>Compare the spatial configuration of two accessibility indexes.</p>
+		</div>
+		<div slot="below">
+			<p>
+				Select two indexes and compare the performance of the various areas of your city to
+				investigate if all the green accessibility indexes tell the same story.
+			</p>
+			<p>Hover on a cell or a group to explore how it changes in the overall ranking.</p>
+		</div>
+	</ExpandableTile>
+</div> -->
+
+<svelte:window bind:innerHeight bind:innerWidth />
+
+{#if same_index}
+	<ToastNotification
+		fullWidth
+		lowContrast
+		kind="error"
+		title="Error"
+		subtitle="Can't compare the same index. Select two different accessibility indexes from the 
+		dropdown menus."
+		caption={new Date().toLocaleString()}
+	/>
+{/if}
+
+<div style="text-align: center;">
+	<div class="block-half">
+		<ComboBox
+			focus="false"
+			titleText="Index"
+			placeholder="Select an accessibility index"
+			bind:selectedId={selectedIdA}
+			items={accessibility_indexes}
+			on:select={update}
+		/>
+	</div>
+	<div class="block-half">
+		<ComboBox
+			focus="false"
+			titleText="Index"
+			placeholder="Select an accessibility index"
+			bind:selectedId={selectedIdB}
+			items={accessibility_indexes}
+			shouldFilterItem={(item) => {
+				return item.id != selectedIdA;
+			}}
+			on:select={update}
+		/>
+	</div>
+</div>
+
+{#if flows && !same_index}
+	<div class="block" style="float: left;width:{innerWidth < 500 ? '100%' : '50%'}">
+		<div style="text-align: center;">
+			{indexA}
+		</div>
+
+		<div
+			id="left"
+			style="
+				display: inline-block; 
+				position: relative; 
+				width: 100%;
+				vertical-align: top;
+				overflow: hidden;
+			"
+		>
+			<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}">
+				<g class="map" /></svg
+			>
+		</div>
+
+		<div
+			style="
+				display: inline-block; 
+				position: relative; 
+				width: 100%;
+				vertical-align: top;
+				overflow: hidden;
+			"
+		>
+			<svg
+				preserveAspectRatio="xMidYMid meet"
+				viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
+			>
+				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+					{#each Array(props.nbreaks) as _, q (q)}
+						{@const innerWidth = columnWidth - 2 * props.margins.left}
+						<rect
+							{q}
+							x={get_x(q, 0, innerWidth)}
+							y={5}
+							width={get_width(q, 0, innerWidth)}
+							height={props.rectangles.width}
+							fill={colors[q]}
+							stroke-width={props.stroke.width}
+							stroke={props.stroke.color}
+							on:mouseover={(d) => {
+								select_bucket(q, true);
+							}}
+							on:mouseleave={(d) => {
+								unselect_bucket();
+							}}
+						/>
+					{/each}
+					<g>
+						{#each Array(props.nbreaks + 1) as _, q (q)}
+							{@const innerWidth = columnWidth - 2 * props.margins.left}
+							<text
+								font-size={props.labels.size}
+								dx={0}
+								dominant-baseline="auto"
+								text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
+								class="small"
+								fill={'white'}
+								x={get_x(q, 0, innerWidth)}
+								y={props.rectangles.width + props.margins.top + 5}
+								>{format('.0s')(breaksA[q])}
+							</text>
+						{/each}
+					</g>
+					<g>
+						{#each Array(props.nbreaks) as _, q (q)}
+							{@const innerWidth = columnWidth - 2 * props.margins.left}
+							<text
+								font-size={props.labels.size}
+								dx={0}
+								dominant-baseline="auto"
+								text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
+								class="small"
+								fill={'white'}
+								x={get_x(q, 0, innerWidth) + get_width(q, 0, innerWidth) / 2}
+								y={0}
+								>{get_node_label(q, '')}
+							</text>
+						{/each}
+					</g>
+				</g>
+			</svg>
+		</div>
+	</div>
+
+	<div class="block" style="float: right;width:{innerWidth < 500 ? '100%' : '50%'}">
+		<div style="text-align: center;">
+			{indexB}
+		</div>
+
+		<div
+			style="
+				display: inline-block; 
+				position: relative; 
+				width: 100%;
+				vertical-align: top;
+				overflow: hidden;
+			"
+			id="right"
+		>
+			<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}"
+				><g class="map" /></svg
+			>
+		</div>
+
+		<div
+			style="
+				display: inline-block; 
+				position: relative; 
+				width: 100%;
+				vertical-align: top;
+				overflow: hidden;				
+			"
+		>
+			<svg
+				preserveAspectRatio="xMidYMid meet"
+				viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
+			>
+				<g transform="translate({props.margins.left} {props.margins.top})" id="to_buckets">
+					{#each Array(props.nbreaks) as _, q (q)}
+						{@const innerWidth = columnWidth - 2 * props.margins.left}
+						<rect
+							{q}
+							x={get_x(q, 1, innerWidth)}
+							y={5}
+							width={get_width(q, 1, innerWidth)}
+							height={props.rectangles.width}
+							fill={colors[q]}
+							stroke-width={props.stroke.width}
+							stroke={props.stroke.color}
+							on:mouseover={(d) => {
+								select_bucket(q, true);
+							}}
+							on:mouseleave={(d) => {
+								unselect_bucket();
+							}}
+							on:focus={(d) => {}}
+						/>
+					{/each}
+				</g>
+				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+					{#each Array(props.nbreaks + 1) as _, q (q)}
+						{@const innerWidth = columnWidth - 2 * props.margins.left}
+						<text
+							font-size={props.labels.size}
+							dx={0}
+							dominant-baseline="auto"
+							text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
+							class="small"
+							fill={'white'}
+							x={get_x(q, 1, innerWidth)}
+							y={props.rectangles.width + props.margins.top + 5}
+							>{format('.0s')(breaksB[q])}
+						</text>
+					{/each}
+				</g>
+				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+					{#each Array(props.nbreaks) as _, q (q)}
+						{@const innerWidth = columnWidth - 2 * props.margins.left}
+						<text
+							font-size={props.labels.size}
+							dx={0}
+							dominant-baseline="auto"
+							text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
+							class="small"
+							fill={'white'}
+							x={get_x(q, 1, innerWidth) + get_width(q, 1, innerWidth) / 2}
+							y={0}
+							>{get_node_label(q, '')}
+						</text>
+					{/each}
+				</g>
+			</svg>
+		</div>
+	</div>
+
+	<!-- <Row style="padding:0px;margin:0px">
+		<Column noGutterLeft noGutterRight>
+			<p style="text-align: center">Flows</p>
+		</Column>
+	</Row>
+
+	<Row style="max-width: 600px;margin:auto;padding-bottom:10px;">
+		<Column noGutterLeft noGutterRight>
+			<AlluvialChart toolbar="false" data={dataflows} {options} />
+		</Column>
+	</Row> -->
+{/if}
+
+<style>
+	div.block-half {
+		display: inline-block;
+	}
+
+	div.block {
+		display: inline-block;
+		width: 50%;
+	}
+
+	p {
+		margin-top: 10px;
+	}
+
+	div {
+		padding: 10px 0px;
+	}
+
+	* :global(.low-opacity) {
+		opacity: 0.2;
+	}
+	* :global(rect.selected),
+	* :global(path.selected) {
+		fill: rgba(254, 95, 85, 0.5);
+		opacity: 1;
+	}
+	* :global(line.selected) {
+		stroke-width: 3;
+		opacity: 1;
+	}
+
+	* :global(rect.node-text-bg) {
+		fill: red;
+		color: red;
+		background-color: brown;
+	}
+
+	:global(text#chart--alluvial-category-1) {
+		visibility: hidden;
+	}
+	:global(text#chart--alluvial-category-0) {
+		visibility: hidden;
+	}
+	:global(.cds--cc--alluvial rect.node) {
+		fill: gray;
+	}
+</style>
