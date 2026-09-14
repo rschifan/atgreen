@@ -38,7 +38,13 @@
 <svelte:window bind:innerWidth={content_width} />
 
 <div>
-	<div bind:clientWidth={content_width}>
+	<!--
+		This div used to `bind:clientWidth={content_width}` as well as the window
+		binding above. Two writers disagreed: clientWidth reads 0 before layout, so
+		`vertical` flipped true then false and the browser fetched the mobile
+		screenshot *and* the desktop one. Viewport width is the signal we want anyway.
+	-->
+	<div>
 		<ProgressIndicator {preventChangeOnClick} currentIndex={step} {vertical}>
 			<ProgressStep label="Select" description="" complete={step >= 0} />
 			<ProgressStep label="Measure" description="" complete={step >= 1} />
