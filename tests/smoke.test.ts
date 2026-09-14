@@ -60,11 +60,22 @@ async function stubBackend(page: Page) {
 }
 
 async function selectTurin(page: Page) {
-	// Carbon's HeaderSearch input id is generated per instance (it was a stable
-	// #search-input before 0.112), so target the class instead; results are exposed
-	// as role=menuitem inside a role=menu.
-	await page.locator('button[aria-label="Search"]').first().click();
-	await page.locator('.bx--header__search-input').fill('Turin');
+	// Open the search the way a user does — the landing page's own "Select a city"
+	// button, which sets HeaderSearch's `active` prop. Carbon 0.112 renders TWO
+	// elements with aria-label="Search" (HeaderSearch.svelte:347 and :452), so
+	// clicking `.first()` was ambiguous: it passed locally and timed out on CI's
+	// slower runner, where the other one won.
+	await page.getByRole('button', { name: /Select a city/ }).click();
+
+	// Carbon 0.112 generates the input id per instance (it was a stable
+	// #search-input before), so target the class. Assert it is actually visible
+	// first: `fill()` on a hidden input reports a 30s timeout that says nothing
+	// about why the panel never opened.
+	const input = page.locator('.bx--header__search-input');
+	await expect(input).toBeVisible({ timeout: 15000 });
+	await input.fill('Turin');
+
+	// Results are exposed as role=menuitem inside a role=menu.
 	await page.getByRole('menuitem', { name: 'Turin' }).click();
 }
 
