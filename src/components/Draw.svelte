@@ -691,7 +691,7 @@
 	<div
 		style="flex-grow: 1;padding-left:{innerWidth > 500
 			? '10px'
-			: '0px'};display: flex;flex-direction: column;visibility: {cell_id ? 'visible' : 'hidden'};"
+			: '0px'};display: flex;flex-direction: column;"
 	>
 		<!--
 			DrawMap has no createEventDispatcher, so the on:update_center /
