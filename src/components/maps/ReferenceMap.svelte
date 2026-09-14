@@ -23,7 +23,7 @@
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
-	export let height = 500;
+	let height: number;
 	export let container: string;
 	export let ref: object;
 
@@ -178,7 +178,7 @@
 	$: if (width && height && map) map.resize();
 </script>
 
-<div bind:clientWidth={width} style="flex: 1 1 auto;height:{height}px;">
+<div bind:clientWidth={width} bind:clientHeight={height} style="flex: 1 1 auto;min-height: 0;">
 	<div id={container} bind:clientWidth={width} style="height: 100%;" />
 
 	{#if map}

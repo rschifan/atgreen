@@ -11,8 +11,6 @@
 		Loading,
 		SkipToContent
 	} from 'carbon-components-svelte';
-	import { selectAll } from 'd3';
-
 	import { Tab, TabContent, Tabs } from 'carbon-components-svelte';
 
 	import { onDestroy, onMount } from 'svelte';
@@ -112,21 +110,7 @@
 
 		if (tab >= 0) {
 			selectedTab = tab;
-			changeTab();
 			isOpen = false;
-		}
-	}
-
-	function changeTab() {
-		if (selectedTab == 2) selectAll('.bx--tab-content ').classed('tabcontent', false);
-		else {
-			selectAll('.bx--tab-content ').classed('tabcontent', true);
-
-			selectAll('.bx--tab-content')
-				.filter(function () {
-					return this.hasAttribute('hidden');
-				})
-				.classed('tabcontent', false);
 		}
 	}
 </script>
@@ -204,12 +188,7 @@
 
 <Content style="padding:0px;flex-grow:1;display: flex;flex-direction: column;">
 	{#if $current_city}
-		<Tabs
-			bind:selected={selectedTab}
-			on:change={(e) => {
-				changeTab(e);
-			}}
-		>
+		<Tabs bind:selected={selectedTab}>
 			<Tab label="Search" />
 			<Tab label="Measure" />
 			<Tab label="Compare" />
@@ -227,10 +206,10 @@
 				<TabContent style="margin:0px;padding:0px;">
 					{#if selectedTab === 0}<CitySelector bind:active {data} />{/if}
 				</TabContent>
-				<TabContent class="tabcontent">
+				<TabContent>
 					{#if selectedTab === 1}<MeasureAccessibility {metadata} />{/if}
 				</TabContent>
-				<TabContent>
+				<TabContent class="pane-block">
 					{#if selectedTab === 2}<CompareAccessibilityIndexes {metadata} />{/if}
 				</TabContent>
 				<TabContent>
@@ -267,9 +246,25 @@
 		background: none;
 	}
 
-	:global(.tabcontent) {
+	/*
+		The visible panel is the flex column that gives every map its height.
+		Keyed on [hidden], which Carbon's TabContent already manages, so there is
+		nothing to race: specificity (0,2,0) beats the [hidden]{display:none}
+		reset while visible, and simply stops matching once hidden.
+
+		The previous form was a bare .tabcontent class applied by a d3 pass and
+		statically on one panel. Carbon re-applied it through $$restProps after
+		the pass removed it, so a hidden, empty panel kept flex-grow:1 and took
+		half the viewport away from the active one.
+	*/
+	:global(.bx--tab-content:not([hidden])) {
 		flex-grow: 1;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/* Compare lays out with floats and inline-block; a flex parent breaks it. */
+	:global(.bx--tab-content.pane-block:not([hidden])) {
+		display: block;
 	}
 </style>
