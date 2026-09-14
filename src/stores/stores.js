@@ -1,7 +1,31 @@
 import { writable } from 'svelte/store';
 
-export const current_city = writable();
+export const current_city = writable(
+	/** @type {{ text: string, feature: any } | undefined} */ (undefined)
+);
 export const current_accessibility_index = writable();
+
+/**
+ * The city list from /rpc/getcitiesinfo, fetched once by the root layout.
+ *
+ * Two places need it and neither owns it: the header search turns it into
+ * results, and the [city] layout resolves a URL segment against it. Keeping it
+ * here means one request rather than one per consumer.
+ */
+export const cities = writable(/** @type {{ features: any[] } | undefined} */ (undefined));
+
+/**
+ * The index metadata from /rpc/getindexes, as a TargetStoreImpl.
+ *
+ * Fetched by the [city] layout and read by the panes below it. A layout cannot
+ * hand values to its pages the way it can to slot content, so this is the seam.
+ */
+export const metadata = writable(
+	/** @type {import('../js/types').TargetStoreImpl | undefined} */ (undefined)
+);
+
+/** Whether the header search is expanded. The landing page's button opens it. */
+export const search_active = writable(false);
 export const current_accessibility_index_data = writable();
 export const current_cell = writable();
 export const hovered_feature = writable();
