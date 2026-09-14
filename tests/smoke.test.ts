@@ -75,8 +75,10 @@ async function selectTurin(page: Page) {
 	await expect(input).toBeVisible({ timeout: 15000 });
 	await input.fill('Turin');
 
-	// Results are exposed as role=menuitem inside a role=menu.
+	// Results are exposed as role=menuitem inside a role=menu. Selecting one is a
+	// navigation now, not a state change, so wait for the URL rather than guess.
 	await page.getByRole('menuitem', { name: 'Turin' }).click();
+	await page.waitForURL('**/Turin/measure');
 }
 
 test.describe('ATGreen smoke', () => {
@@ -129,7 +131,7 @@ test.describe('ATGreen smoke', () => {
 		await selectTurin(page);
 		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
 
-		// All six panels exist in the DOM; only one may hold a live map.
+		// One route is mounted at a time, so one map.
 		await expect(page.locator('.mapboxgl-map')).toHaveCount(1);
 
 		// Explore's 2.8 MB green-areas request must not happen until its tab is opened.
@@ -139,12 +141,12 @@ test.describe('ATGreen smoke', () => {
 		await expect.poll(() => rpcCalls.filter((c) => c === 'queryosmgreen').length).toBe(1);
 	});
 
-	// Every other test here navigates with the tab strip, which passes a number.
-	// The header panel passes `name`, a DOM attribute, so it passed the string "1"
-	// and the `selectedTab === 1` gate added alongside lazy mounting was false: the
-	// tab highlighted and the panel under it rendered nothing. Green suite, blank
-	// screen on production. This walks the path the panel actually takes.
-	test('header panel links mount the panel they select', async ({ page }) => {
+	// Sections are addressable. This replaces a test for a bug that is now
+	// unexpressible: the header panel used to set a numeric tab index from a DOM
+	// attribute — a string — which the `selectedTab === n` panel gates then failed
+	// to match, so six links highlighted a tab and rendered an empty panel. There
+	// is no index any more; the URL decides what mounts.
+	test('header panel links navigate to their section', async ({ page }) => {
 		await stubBackend(page);
 		await page.goto('/');
 		await selectTurin(page);
@@ -154,13 +156,47 @@ test.describe('ATGreen smoke', () => {
 		await page.locator('header button.bx--header__action').last().click();
 		await page.getByRole('link', { name: 'Compare', exact: true }).click();
 
+		await page.waitForURL('**/Turin/compare');
 		await expect(page.getByRole('tab', { name: 'Compare' })).toHaveAttribute(
 			'aria-selected',
 			'true'
 		);
-		// The assertion that was missing: the selected panel has to contain something.
-		const panel = page.locator('[role="tabpanel"]:not([hidden])');
-		await expect(panel).not.toBeEmpty();
+		// The assertion that was missing when this shipped broken: the section has
+		// to actually render something.
+		await expect(page.locator('#main-content')).not.toBeEmpty();
+		await expect(page.locator('.bx--tabs')).toBeVisible();
+	});
+
+	test('a section URL can be opened directly, shared and navigated back', async ({ page }) => {
+		await stubBackend(page);
+
+		// Deep link, cold: no click path reached this, the URL alone did.
+		await page.goto('/Turin/draw');
+		await expect(page.getByRole('tab', { name: 'Draw' })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 20000 });
+
+		// Tabs are real links, so the URL follows the view...
+		await page.getByRole('tab', { name: 'Explore' }).click();
+		await page.waitForURL('**/Turin/explore');
+
+		// ...and the back button follows the URL.
+		await page.goBack();
+		await page.waitForURL('**/Turin/draw');
+		await expect(page.getByRole('tab', { name: 'Draw' })).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('a city is reachable by name whatever the accents and casing', async ({ page }) => {
+		await stubBackend(page);
+
+		// The fixture's cities include Turin; a lower-case slug must find it, since
+		// links may be typed by hand even though the app never generates them.
+		await page.goto('/turin/measure');
+		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
+
+		// An unknown city explains itself instead of rendering an empty shell.
+		await page.goto('/atlantis/measure');
+		await expect(page.getByText(/No city called/)).toBeVisible();
+		await expect(page.locator('.mapboxgl-map')).toHaveCount(0);
 	});
 
 	test('maps are torn down when their tab closes', async ({ page }) => {
