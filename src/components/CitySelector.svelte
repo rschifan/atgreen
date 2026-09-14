@@ -134,7 +134,12 @@
 		on:close
 		on:submit
 	>
-		<Tutorial />
+		<!--
+			Carbon's Modal renders its slot whether or not it is open — it only toggles
+			`class:is-visible` — so an unmounted Tutorial still put its <img> in the DOM
+			and the browser fetched a 3.9 MB screenshot on every landing-page load.
+		-->
+		{#if open}<Tutorial />{/if}
 	</Modal>
 </div>
 
