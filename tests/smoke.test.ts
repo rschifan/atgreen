@@ -97,6 +97,16 @@ test.describe('ATGreen smoke', () => {
 		// Regression guard: the grid is fetched exactly once per city selection. It was
 		// fetched three times (immediate: true), then zero times (immediate: false plus
 		// lazily-mounted tabs). Both shipped; both would be caught here.
+		//
+		// Poll rather than assert immediately: the watcher debounces by 500ms, and with
+		// stubbed responses the tiles appear well before that elapses. Asserting the
+		// count straight after the visibility check was a race that happened to pass.
+		await expect
+			.poll(() => rpcCalls.filter((c) => c === 'getaccessibility').length, { timeout: 15000 })
+			.toBe(1);
+
+		// ...and it must stay at one: no late duplicate.
+		await page.waitForTimeout(2000);
 		const accessibility = rpcCalls.filter((c) => c === 'getaccessibility');
 		expect(accessibility, `getaccessibility calls: ${accessibility.length}`).toHaveLength(1);
 	});
@@ -116,6 +126,31 @@ test.describe('ATGreen smoke', () => {
 		await page.getByRole('tab', { name: 'Explore' }).click();
 		await expect.poll(() => rpcCalls.filter((c) => c === 'queryosmgreen').length).toBe(1);
 	});
+
+	// Every other test here navigates with the tab strip, which passes a number.
+	// The header panel passes `name`, a DOM attribute, so it passed the string "1"
+	// and the `selectedTab === 1` gate added alongside lazy mounting was false: the
+	// tab highlighted and the panel under it rendered nothing. Green suite, blank
+	// screen on production. This walks the path the panel actually takes.
+	test('header panel links mount the panel they select', async ({ page }) => {
+		await stubBackend(page);
+		await page.goto('/');
+		await selectTurin(page);
+		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
+
+		// The HeaderAction button carries no accessible name; it is the panel toggle.
+		await page.locator('header button.bx--header__action').last().click();
+		await page.getByRole('link', { name: 'Compare', exact: true }).click();
+
+		await expect(page.getByRole('tab', { name: 'Compare' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		// The assertion that was missing: the selected panel has to contain something.
+		const panel = page.locator('[role="tabpanel"]:not([hidden])');
+		await expect(panel).not.toBeEmpty();
+	});
+
 	test('maps are torn down when their tab closes', async ({ page }) => {
 		// Counting .mapboxgl-map nodes does NOT test this: Svelte removes the DOM node
 		// whether or not map.remove() ran, so that assertion passes even with the

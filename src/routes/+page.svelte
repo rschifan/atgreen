@@ -104,7 +104,11 @@
 	function handleAnchorClick(event: PointerEvent) {
 		event.preventDefault();
 
-		const tab = event?.target.name;
+		// `name` is a DOM attribute, so this is the string "0".."5". The panels are
+		// gated on `selectedTab === n`, which a string never satisfies — the tab would
+		// highlight and the panel below it render empty. `"1" >= 0` coerces, so the
+		// guard below never caught it; Number() makes a bad value NaN, which does.
+		const tab = Number(event?.target.name);
 
 		if (tab >= 0) {
 			selectedTab = tab;
