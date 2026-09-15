@@ -31,3 +31,26 @@ to test something actively, get in touch first.
 - The Mapbox access token in `src/js/mapbox.js` is a **public** (`pk.`) token, exposed by
   design in any client-side Mapbox application. It is not a secret.
 - Findings that require a compromised end-user device or browser.
+
+## Dependency overrides
+
+`package.json` pins **`cookie` to `^0.7.0`** through an npm `override`. Do not remove it
+without reading this.
+
+`@sveltejs/kit@2.70.3` — the newest release at the time of writing — declares
+`cookie@^0.6.0`, and every version below `0.7.0` carries
+[GHSA-pxg6-pf52-xh8x](https://github.com/advisories/GHSA-pxg6-pf52-xh8x) (low severity:
+`cookie` accepts a name, path or domain containing out-of-bounds characters). There is no
+upstream fix to upgrade to, and npm's own resolution is nonsense — it proposes downgrading
+`@sveltejs/kit` to `0.0.30` and `@sveltejs/adapter-node` to `0.0.18`, which is why the
+Dependabot security job fails outright rather than opening a pull request.
+
+This application never passes untrusted input to a cookie name, path or domain — it sets no
+cookies at all, and has no hooks and no server routes — so the practical exposure was nil.
+The override exists so that a permanently failing security job does not mask a real one
+later. `npm audit` reports zero vulnerabilities with it in place.
+
+Verified with `cookie@0.7.2`: 79 unit tests, 11 end-to-end tests, a production build, and
+every route served by the real `adapter-node` server (`node build/index.js`), which is the
+process that actually loads `cookie` at runtime — `vite preview` does not. Drop the override
+once a SvelteKit release widens that range.
