@@ -102,3 +102,38 @@ export function create_empty_geojson() {
 export function create_geojson(features: []) {
 	return { type: 'FeatureCollection', features: features };
 }
+
+/** The five characters that can break out of HTML text or an attribute value. */
+const HTML_ESCAPES: Record<string, string> = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&#39;'
+};
+
+/** `value` rendered as text rather than markup. */
+export function escape_html(value: unknown): string {
+	return String(value ?? '').replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+}
+
+/**
+ * Build an HTML string with every interpolation escaped.
+ *
+ *     html`<span>${feature.properties.osm_name}</span>`
+ *
+ * Svelte escapes `{...}` in templates, but these popups are hand-built strings
+ * handed to Mapbox's `setHTML`, which assigns straight to `innerHTML` — so they
+ * sit outside that protection. `osm_name` is OpenStreetMap free text: anyone with
+ * an account can rename a park, and the enforced CSP carries `script-src
+ * 'unsafe-inline'`, so an injected handler would run.
+ *
+ * A tagged template rather than escaping one known-bad value, because the next
+ * field somebody adds is escaped too, without them having to remember.
+ */
+export function html(strings: TemplateStringsArray, ...values: unknown[]): string {
+	return strings.reduce(
+		(out, part, i) => out + part + (i < values.length ? escape_html(values[i]) : ''),
+		''
+	);
+}
