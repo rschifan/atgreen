@@ -7,6 +7,7 @@
 	import { extent } from '../js/layers';
 	import { current_city } from '../stores/stores';
 	import ExploreMap from './maps/ExploreMap.svelte';
+	import ToolPane from './ToolPane.svelte';
 
 	let green_types = [
 		{ text: 'village_green', id: 0 },
@@ -37,7 +38,10 @@
 	let data: { features: GreenFeature[] } | undefined;
 	let minv = 0;
 	let maxv = 0;
-	let ref: object;
+	// Two bindings, two variables. `ref` was bound by both the Search box and
+	// ExploreMap, so the DOM node and the mapbox instance raced for one slot.
+	let search_ref: HTMLInputElement | null = null;
+	let map_ref: object;
 	let active = false;
 
 	let unsubscribe_greenareas_request: Unsubscriber;
@@ -106,10 +110,15 @@
 	});
 </script>
 
-{#if data && data.features && data.features.length > 0}
-	<div class="blocks-container">
-		<div class="block">
+<ToolPane>
+	<svelte:fragment slot="rail">
+		{#if data && data.features && data.features.length > 0}
+			<!--
+				Ten values is where a dropdown earns its keep, so this one stays a
+				MultiSelect — and unlike Create's it was already wired correctly.
+			-->
 			<MultiSelect
+				filterable
 				selectedIds={green_types_selected_ids}
 				spellcheck="false"
 				titleText="Green area types"
@@ -119,24 +128,21 @@
 					green_types_selected_ids = event.detail.selectedIds;
 				}}
 			/>
-		</div>
 
-		<div class="block">
 			<Slider
-				fullWidth="false"
-				step="1"
-				labelText="Minimum size (ha)"
+				fullWidth
+				hideTextInput
+				step={1}
+				labelText="Minimum size — {current_minimum_size} ha"
 				min={Math.floor(minv)}
 				max={Math.floor(maxv)}
-				maxLabel={Math.floor(maxv)}
+				minLabel={String(Math.floor(minv))}
+				maxLabel={String(Math.floor(maxv))}
 				bind:value={current_minimum_size}
 			/>
-		</div>
 
-		<div class="block">
 			<Search
-				style="min-width: 150px;"
-				bind:ref
+				bind:ref={search_ref}
 				bind:active
 				bind:value={current_search_text_value}
 				bind:selectedResultIndex
@@ -144,24 +150,31 @@
 				size="lg"
 				placeholder="Filter by name"
 				autocomplete="on"
-				autofocus="on"
 			/>
-		</div>
-	</div>
-{/if}
 
-<div style="position: relative; flex-grow: 1;">
+			<p class="count">{data.features.length.toLocaleString()} green areas</p>
+		{:else}
+			<p class="count">Loading green areas…</p>
+		{/if}
+	</svelte:fragment>
+
 	<ExploreMap
-		bind:ref
+		bind:ref={map_ref}
 		bind:data
 		container="explore_green_areas_map"
 		green_types={green_types_selected_ids}
 		minimum_size={current_minimum_size}
 		selected_green_areas={results}
 	/>
-</div>
+</ToolPane>
 
 <style>
+	.count {
+		color: var(--cds-text-03, #6f6f6f);
+		font-size: 0.82rem;
+		margin: 0;
+	}
+
 	div {
 		padding: 10px 0px;
 	}

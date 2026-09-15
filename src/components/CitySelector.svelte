@@ -44,15 +44,11 @@
 	});
 
 	let userInteracting: boolean;
-	let content_height: number;
-	let content_width: number;
 
 	function openTutorial() {
 		open = true;
 	}
 </script>
-
-<svelte:window bind:innerHeight={content_height} bind:innerWidth={content_width} />
 
 <div style="position: absolute; width:100%;top:14%;text-align: center;z-index:100;">
 	<div class="subtitle">

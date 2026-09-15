@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ComboBox, ExpandableTile, Tile, ToastNotification } from 'carbon-components-svelte';
+	import { ComboBox, ToastNotification } from 'carbon-components-svelte';
+	import ToolPane from './ToolPane.svelte';
 	import { format, geoMercator, geoPath, max, min, scaleThreshold, select, selectAll } from 'd3';
 	import { ckmeans } from 'simple-statistics';
 	import { afterUpdate, onDestroy, onMount } from 'svelte';
@@ -59,12 +60,26 @@
 	let columnWidth: number;
 
 	let unsubscribe_current_city_event: Unsubscriber;
-	let innerHeight: number;
-	let innerWidth: number;
+
+	/*
+		Measured from the stage, not the window. `innerWidth` was the width of the
+		browser, which stopped being the width of this view the moment a 300px rail
+		appeared beside it — and it also meant every resize event invalidated the
+		component, which re-ran `draw_maps` and rebuilt all 26,440 SVG paths.
+	*/
+	let stageWidth = 0;
 
 	$: {
-		columnWidth = innerWidth < 500 ? innerWidth - 2 * props.margins.left : innerWidth / 2;
-		height = columnWidth < height ? columnWidth : props.map.height;
+		// Clamp at zero. On the first render the stage has not been measured yet, so
+		// `stageWidth` is 0 and the narrow branch made `columnWidth` negative — which
+		// d3's projection turns into `M NaN,NaN` for every path in both maps. That
+		// flooded the console with thousands of SVG errors before the real width
+		// arrived and quietly redrew over them.
+		columnWidth = Math.max(
+			0,
+			stageWidth < 500 ? stageWidth - 2 * props.margins.left : stageWidth / 2
+		);
+		height = columnWidth > 0 && columnWidth < height ? columnWidth : props.map.height;
 	}
 	export let metadata: TargetStoreImpl;
 
@@ -200,12 +215,6 @@
 			.on('mouseout', (e, datum) => {
 				unselect_cell(datum.properties.x, datum.properties.y);
 			});
-	}
-
-	function get_y(i: number, index: number, innerHeight: number): number {
-		const rate: number =
-			index == 0 ? sum_k(freqA, i) / valuesA.length : sum_k(freqB, i) / valuesB.length;
-		return innerHeight * rate;
 	}
 
 	function get_x(i: number, index: number, innerWidth: number): number {
@@ -345,7 +354,6 @@
 		let to_rects = selectAll('#to_buckets > rect');
 		let to_clause = from ? to_rects : from_rects;
 		let from_clause = from ? from_rects : to_rects;
-		let targets = new Set();
 
 		lines.classed('low-opacity', true);
 		from_rects.classed('low-opacity', true);
@@ -394,7 +402,9 @@
 	}
 
 	afterUpdate(() => {
-		if (dataA && dataB) draw_maps(dataA, dataB);
+		// `columnWidth > 0` is the same guard as above, at the other end: drawing
+		// into an unmeasured stage produces NaN geometry.
+		if (dataA && dataB && columnWidth > 0) draw_maps(dataA, dataB);
 	});
 
 	onMount(() => {
@@ -440,232 +450,231 @@
 	</ExpandableTile>
 </div> -->
 
-<svelte:window bind:innerHeight bind:innerWidth />
-
-{#if same_index}
-	<ToastNotification
-		fullWidth
-		lowContrast
-		kind="error"
-		title="Error"
-		subtitle="Can't compare the same index. Select two different accessibility indexes from the 
-		dropdown menus."
-		caption={new Date().toLocaleString()}
-	/>
-{/if}
-
-<div style="text-align: center;">
-	<div class="block-half">
+<ToolPane scroll>
+	<svelte:fragment slot="rail">
 		<ComboBox
-			focus="false"
-			titleText="Index"
+			titleText="Index A"
 			placeholder="Select an accessibility index"
 			bind:selectedId={selectedIdA}
 			items={accessibility_indexes}
 			on:select={update}
 		/>
-	</div>
-	<div class="block-half">
+
 		<ComboBox
-			focus="false"
-			titleText="Index"
+			titleText="Index B"
 			placeholder="Select an accessibility index"
 			bind:selectedId={selectedIdB}
 			items={accessibility_indexes}
-			shouldFilterItem={(item) => {
-				return item.id != selectedIdA;
-			}}
+			shouldFilterItem={(item) => item.id != selectedIdA}
 			on:select={update}
 		/>
-	</div>
-</div>
 
-{#if flows && !same_index}
-	<div class="block" style="float: left;width:{innerWidth < 500 ? '100%' : '50%'}">
-		<div style="text-align: center;">
-			{indexA}
-		</div>
+		{#if same_index}
+			<ToastNotification
+				lowContrast
+				kind="error"
+				title="Pick two different indexes"
+				subtitle="Comparing an index with itself has nothing to show."
+			/>
+		{/if}
+	</svelte:fragment>
 
-		<div
-			id="left"
-			style="
+	<div bind:clientWidth={stageWidth} class="columns">
+		{#if flows && !same_index}
+			<div class="block" style="float: left;width:{stageWidth < 500 ? '100%' : '50%'}">
+				<div style="text-align: center;">
+					{indexA}
+				</div>
+
+				<div
+					id="left"
+					style="
 				display: inline-block; 
 				position: relative; 
 				width: 100%;
 				vertical-align: top;
 				overflow: hidden;
 			"
-		>
-			<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}">
-				<g class="map" /></svg
-			>
-		</div>
+				>
+					<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}">
+						<g class="map" /></svg
+					>
+				</div>
 
-		<div
-			style="
+				<div
+					style="
 				display: inline-block; 
 				position: relative; 
 				width: 100%;
 				vertical-align: top;
 				overflow: hidden;
 			"
-		>
-			<svg
-				preserveAspectRatio="xMidYMid meet"
-				viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
-			>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
-					{#each Array(props.nbreaks) as _, q (q)}
-						{@const innerWidth = columnWidth - 2 * props.margins.left}
-						<rect
-							{q}
-							x={get_x(q, 0, innerWidth)}
-							y={5}
-							width={get_width(q, 0, innerWidth)}
-							height={props.rectangles.width}
-							fill={colors[q]}
-							stroke-width={props.stroke.width}
-							stroke={props.stroke.color}
-							role="button"
-							tabindex="0"
-							aria-label="Highlight group {q}"
-							on:mouseover={() => select_bucket(q, true)}
-							on:focus={() => select_bucket(q, true)}
-							on:mouseleave={() => unselect_bucket()}
-							on:blur={() => unselect_bucket()}
-						/>
-					{/each}
-					<g>
-						{#each Array(props.nbreaks + 1) as _, q (q)}
-							{@const innerWidth = columnWidth - 2 * props.margins.left}
-							<text
-								font-size={props.labels.size}
-								dx={0}
-								dominant-baseline="auto"
-								text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
-								class="small"
-								fill="white"
-								x={get_x(q, 0, innerWidth)}
-								y={props.rectangles.width + props.margins.top + 5}
-								>{format('.0s')(breaksA[q])}
-							</text>
-						{/each}
-					</g>
-					<g>
-						{#each Array(props.nbreaks) as _, q (q)}
-							{@const innerWidth = columnWidth - 2 * props.margins.left}
-							<text
-								font-size={props.labels.size}
-								dx={0}
-								dominant-baseline="auto"
-								text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
-								class="small"
-								fill="white"
-								x={get_x(q, 0, innerWidth) + get_width(q, 0, innerWidth) / 2}
-								y={0}
-								>{get_node_label(q, '')}
-							</text>
-						{/each}
-					</g>
-				</g>
-			</svg>
-		</div>
-	</div>
+				>
+					<svg
+						preserveAspectRatio="xMidYMid meet"
+						viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
+					>
+						<g transform="translate({props.margins.left} {props.margins.top})" id="from_buckets">
+							{#each Array(props.nbreaks) as _, q (q)}
+								{@const innerWidth = columnWidth - 2 * props.margins.left}
+								<rect
+									{q}
+									x={get_x(q, 0, innerWidth)}
+									y={5}
+									width={get_width(q, 0, innerWidth)}
+									height={props.rectangles.width}
+									fill={colors[q]}
+									stroke-width={props.stroke.width}
+									stroke={props.stroke.color}
+									role="button"
+									tabindex="0"
+									aria-label="Highlight group {q}"
+									on:mouseover={() => select_bucket(q, true)}
+									on:focus={() => select_bucket(q, true)}
+									on:mouseleave={() => unselect_bucket()}
+									on:blur={() => unselect_bucket()}
+								/>
+							{/each}
+							<g>
+								{#each Array(props.nbreaks + 1) as _, q (q)}
+									{@const innerWidth = columnWidth - 2 * props.margins.left}
+									<text
+										font-size={props.labels.size}
+										dx={0}
+										dominant-baseline="auto"
+										text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
+										class="small"
+										fill="white"
+										x={get_x(q, 0, innerWidth)}
+										y={props.rectangles.width + props.margins.top + 5}
+										>{format('.0s')(breaksA[q])}
+									</text>
+								{/each}
+							</g>
+							<g>
+								{#each Array(props.nbreaks) as _, q (q)}
+									{@const innerWidth = columnWidth - 2 * props.margins.left}
+									<text
+										font-size={props.labels.size}
+										dx={0}
+										dominant-baseline="auto"
+										text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
+										class="small"
+										fill="white"
+										x={get_x(q, 0, innerWidth) + get_width(q, 0, innerWidth) / 2}
+										y={0}
+										>{get_node_label(q, '')}
+									</text>
+								{/each}
+							</g>
+						</g>
+					</svg>
+				</div>
+			</div>
 
-	<div class="block" style="float: right;width:{innerWidth < 500 ? '100%' : '50%'}">
-		<div style="text-align: center;">
-			{indexB}
-		</div>
+			<div class="block" style="float: right;width:{stageWidth < 500 ? '100%' : '50%'}">
+				<div style="text-align: center;">
+					{indexB}
+				</div>
 
-		<div
-			style="
+				<div
+					style="
 				display: inline-block; 
 				position: relative; 
 				width: 100%;
 				vertical-align: top;
 				overflow: hidden;
 			"
-			id="right"
-		>
-			<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}"
-				><g class="map" /></svg
-			>
-		</div>
+					id="right"
+				>
+					<svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 {columnWidth} {height}"
+						><g class="map" /></svg
+					>
+				</div>
 
-		<div
-			style="
+				<div
+					style="
 				display: inline-block; 
 				position: relative; 
 				width: 100%;
 				vertical-align: top;
 				overflow: hidden;				
 			"
-		>
-			<svg
-				preserveAspectRatio="xMidYMid meet"
-				viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
-			>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="to_buckets">
-					{#each Array(props.nbreaks) as _, q (q)}
-						{@const innerWidth = columnWidth - 2 * props.margins.left}
-						<rect
-							{q}
-							x={get_x(q, 1, innerWidth)}
-							y={5}
-							width={get_width(q, 1, innerWidth)}
-							height={props.rectangles.width}
-							fill={colors[q]}
-							stroke-width={props.stroke.width}
-							stroke={props.stroke.color}
-							role="button"
-							tabindex="0"
-							aria-label="Highlight group {q}"
-							on:mouseover={() => select_bucket(q, false)}
-							on:focus={() => select_bucket(q, false)}
-							on:mouseleave={() => unselect_bucket()}
-							on:blur={() => unselect_bucket()}
-							on:focus={(d) => {}}
-						/>
-					{/each}
-				</g>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="to_bucket_labels">
-					{#each Array(props.nbreaks + 1) as _, q (q)}
-						{@const innerWidth = columnWidth - 2 * props.margins.left}
-						<text
-							font-size={props.labels.size}
-							dx={0}
-							dominant-baseline="auto"
-							text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
-							class="small"
-							fill="white"
-							x={get_x(q, 1, innerWidth)}
-							y={props.rectangles.width + props.margins.top + 5}
-							>{format('.0s')(breaksB[q])}
-						</text>
-					{/each}
-				</g>
-				<g transform="translate({props.margins.left} {props.margins.top})" id="to_bucket_names">
-					{#each Array(props.nbreaks) as _, q (q)}
-						{@const innerWidth = columnWidth - 2 * props.margins.left}
-						<text
-							font-size={props.labels.size}
-							dx={0}
-							dominant-baseline="auto"
-							text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
-							class="small"
-							fill="white"
-							x={get_x(q, 1, innerWidth) + get_width(q, 1, innerWidth) / 2}
-							y={0}
-							>{get_node_label(q, '')}
-						</text>
-					{/each}
-				</g>
-			</svg>
-		</div>
+				>
+					<svg
+						preserveAspectRatio="xMidYMid meet"
+						viewBox="0 0 {columnWidth} {props.rectangles.width + props.margins.top + 20}"
+					>
+						<g transform="translate({props.margins.left} {props.margins.top})" id="to_buckets">
+							{#each Array(props.nbreaks) as _, q (q)}
+								{@const innerWidth = columnWidth - 2 * props.margins.left}
+								<rect
+									{q}
+									x={get_x(q, 1, innerWidth)}
+									y={5}
+									width={get_width(q, 1, innerWidth)}
+									height={props.rectangles.width}
+									fill={colors[q]}
+									stroke-width={props.stroke.width}
+									stroke={props.stroke.color}
+									role="button"
+									tabindex="0"
+									aria-label="Highlight group {q}"
+									on:mouseover={() => select_bucket(q, false)}
+									on:focus={() => select_bucket(q, false)}
+									on:mouseleave={() => unselect_bucket()}
+									on:blur={() => unselect_bucket()}
+									on:focus={(d) => {}}
+								/>
+							{/each}
+						</g>
+						<g
+							transform="translate({props.margins.left} {props.margins.top})"
+							id="to_bucket_labels"
+						>
+							{#each Array(props.nbreaks + 1) as _, q (q)}
+								{@const innerWidth = columnWidth - 2 * props.margins.left}
+								<text
+									font-size={props.labels.size}
+									dx={0}
+									dominant-baseline="auto"
+									text-anchor={q == 0 ? 'start ' : q == props.nbreaks ? 'start' : 'end'}
+									class="small"
+									fill="white"
+									x={get_x(q, 1, innerWidth)}
+									y={props.rectangles.width + props.margins.top + 5}
+									>{format('.0s')(breaksB[q])}
+								</text>
+							{/each}
+						</g>
+						<g transform="translate({props.margins.left} {props.margins.top})" id="to_bucket_names">
+							{#each Array(props.nbreaks) as _, q (q)}
+								{@const innerWidth = columnWidth - 2 * props.margins.left}
+								<text
+									font-size={props.labels.size}
+									dx={0}
+									dominant-baseline="auto"
+									text-anchor={q == 0 ? 'middle ' : q == props.nbreaks ? 'middle' : 'middle'}
+									class="small"
+									fill="white"
+									x={get_x(q, 1, innerWidth) + get_width(q, 1, innerWidth) / 2}
+									y={0}
+									>{get_node_label(q, '')}
+								</text>
+							{/each}
+						</g>
+					</svg>
+				</div>
+			</div>
+		{/if}
 	</div>
-{/if}
+</ToolPane>
 
 <style>
+	.columns {
+		width: 100%;
+	}
+
 	div.block-half {
 		display: inline-block;
 	}

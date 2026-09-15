@@ -8,17 +8,6 @@
 </svelte:head>
 
 {#if $current_city}
-	<div class="pane">
-		<Create />
-	</div>
+	<!-- ToolPane supplies the rail/stage layout; no wrapper needed here. -->
+	<Create />
 {/if}
-
-<style>
-	/* The flex column every map in this pane measures its height against. */
-	.pane {
-		flex-grow: 1;
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-	}
-</style>
