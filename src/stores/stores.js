@@ -3,7 +3,13 @@ import { writable } from 'svelte/store';
 export const current_city = writable(
 	/** @type {{ text: string, feature: any } | undefined} */ (undefined)
 );
-export const current_accessibility_index = writable();
+/**
+ * Set once here rather than in Measure's onMount. That hook reset it to WHO on
+ * every mount, which was invisible while panels mounted once and became "your
+ * index choice is discarded whenever you revisit Measure" once they became
+ * route-scoped.
+ */
+export const current_accessibility_index = writable('WHO');
 
 /**
  * The city list from /rpc/getcitiesinfo, fetched once by the root layout.

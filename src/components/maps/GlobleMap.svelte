@@ -44,6 +44,7 @@
 	export let userInteracting = false;
 	let spinEnabled = true;
 	let width = 0;
+	let height = 0;
 
 	$: userInteracting = $current_city ? true : false;
 
@@ -140,10 +141,28 @@
 	$: if (width && map) map.resize();
 </script>
 
-<div bind:clientWidth={width} style="height: 100%;">
-	<div id={container} bind:clientWidth={width} style="height: 100%;" />
+<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
+	<div id={container} />
 
 	{#if map}
 		<slot />
 	{/if}
 </div>
+
+<style>
+	/*
+		The map fills its stage absolutely, so no ancestor has to cooperate by
+		passing a height down. `height` is measured rather than declared, which
+		finally gives the `$: if (width && height && map) map.resize()` guard a
+		real input instead of the constant 500 it used to compare.
+	*/
+	.map-root {
+		position: absolute;
+		inset: 0;
+	}
+
+	.map-root > :global(div) {
+		width: 100%;
+		height: 100%;
+	}
+</style>

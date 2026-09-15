@@ -6,13 +6,13 @@
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR } from '../../js/colors';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
-	import { adjust_zoom, create_empty_geojson } from '../../js/utils';
+	import { adjust_zoom, create_empty_geojson, refit_zoom } from '../../js/utils';
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
-	export let height = 400;
+	let height: number;
 	export let container: string;
 	export let ref: object;
 	export let data: object;
@@ -54,7 +54,10 @@
 		1: 'relation'
 	};
 
-	$: if (width && height && map) map.resize();
+	$: if (width && height && map) {
+		map.resize();
+		refit_zoom(map);
+	}
 
 	$: if (data && data.features && data.features.length > 0) {
 		const green_areas_source = map?.getSource(GREENAREAS_SOURCE);
@@ -299,8 +302,8 @@
 	}
 </script>
 
-<div bind:clientWidth={width} style="flex-grow: 1;">
-	<div id={container} bind:clientWidth={width} style="height: 100%;" />
+<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
+	<div id={container} />
 
 	{#if map}
 		<slot />
@@ -317,6 +320,22 @@
 {/if}
 
 <style>
+	/*
+		The map fills its stage absolutely, so no ancestor has to cooperate by
+		passing a height down. `height` is measured rather than declared, which
+		finally gives the `$: if (width && height && map) map.resize()` guard a
+		real input instead of the constant 500 it used to compare.
+	*/
+	.map-root {
+		position: absolute;
+		inset: 0;
+	}
+
+	.map-root > :global(div) {
+		width: 100%;
+		height: 100%;
+	}
+
 	:global(.attr-name) {
 		color: black;
 		font-weight: 800;

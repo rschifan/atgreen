@@ -72,12 +72,18 @@
 	let unsubscribe_accessibility_index: (() => void) | undefined;
 	let minv: number;
 	let maxv: number;
-	let offset: number;
 
 	let legend_node;
 
 	export let metadata;
-	export let containerWidth: number;
+	/*
+		The legend lives in the rail now, not floating over the map, so it sizes
+		itself from its own container instead of the window. It used to take
+		`containerWidth` from a `<svelte:window bind:innerWidth>` in the parent and
+		compute a left offset to fake centring — which was already only correct
+		when the map happened to be full-width, and is simply wrong beside a rail.
+	*/
+	let containerWidth: number = 0;
 
 	let margins = {
 		top: 25,
@@ -125,14 +131,15 @@
 
 	$: n_steps = 40;
 	$: n_xticks = 4;
-	$: width = containerWidth < 500 ? containerWidth * 0.7 : containerWidth / 2;
+	// Fill the rail. The container stretches to the rail's width regardless of
+	// what the svg inside it measures, so this cannot feed back on itself.
+	$: width = Math.max(containerWidth, 0);
 	$: innerWidth = width - margins.left - margins.right;
 	$: width_class = innerWidth / n_steps;
-	$: offset = (containerWidth - width - 20) / 2;
 </script>
 
 {#if $current_accessibility_index_data && current && !loading}
-	<div bind:this={legend_node} class="legend-container" style="position:absolute; left:{offset}px;">
+	<div bind:this={legend_node} bind:clientWidth={containerWidth} class="legend-container">
 		<figure>
 			<svg height={margins.top + margins.bottom + legend.height + ticks.margin} {width}>
 				{#each Array(n_steps) as _, index (index)}
@@ -198,10 +205,6 @@
 
 <style>
 	div.legend-container {
-		position: absolute;
-		bottom: 1.5rem;
-		background-color: rgba(10, 10, 10, 0.75);
-		border-radius: 5px;
 		color: white;
 	}
 

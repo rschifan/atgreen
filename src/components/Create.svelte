@@ -336,7 +336,7 @@
 {/if}
 
 {#if data && data.features.length > 0}
-	<div style="flex-grow: 1;display: flex;flex-direction: column;">
+	<div style="position: relative; flex-grow: 1;">
 		<CreateMap
 			container="custom_accessibility_index_map"
 			bind:ref={map}

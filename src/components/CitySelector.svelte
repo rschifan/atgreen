@@ -115,7 +115,7 @@
 	</div>
 </div>
 
-<div style="display: flex;flex-direction: column;flex-grow: 1;">
+<div style="position: relative; flex-grow: 1;">
 	<GlobleMap
 		bind:ref={map}
 		bind:mapLoaded

@@ -103,19 +103,17 @@
 		features: Feature[];
 	}
 
-	let map_width: number;
-	let map_height: number;
-
 	$: create_button_disabled =
 		$current_city && $current_city.text && newMapLoaded && referenceMapLoaded;
 	$: green_types_combobox_disabled = current_index_type == AccessibilityIndexType.EXPOSURE;
 	$: time_budget_slider_disabled = current_index_type == AccessibilityIndexType.MINIMUM_DISTANCE;
 
-	$: if (map_width && map_height && reference_map && new_map) {
-		reference_map.resize();
-		new_map.resize();
-		console.log(map_width, map_height);
-	}
+	/*
+		The resize block that used to live here bound the wrapper's clientWidth and
+		clientHeight and called resize() on both maps — and logged them on every
+		frame of a drag. Each map now measures its own root and resizes itself, so
+		this was doing the same work from further away.
+	*/
 
 	function accessibility_diffmap(geojson1: GeoJSON, geojson2: GeoJSON) {
 		const features: Feature[] = [];
@@ -647,14 +645,8 @@
 	/>
 {/if}
 
-<div style="flex-grow: 1;display: flex;flex-direction: {innerWidth > 500 ? 'row' : 'column'};">
-	<div
-		style="flex-grow: 1;padding-right:{innerWidth > 500
-			? '10px'
-			: '0px'};display: flex;flex-direction: column;"
-		bind:clientWidth={map_width}
-		bind:clientHeight={map_height}
-	>
+<div class="pair">
+	<div class="cell">
 		<ReferenceMap
 			container="draw_reference_map"
 			bind:ref={reference_map}
@@ -682,22 +674,17 @@
 					bind:index_type={current_index_type}
 					bind:threshold={current_target}
 					data={reference_data}
-					width={innerWidth > 500 ? 400 : innerWidth / 2}
 				/>
 			{/if}
 		</ReferenceMap>
 	</div>
 
-	<div
-		style="flex-grow: 1;padding-left:{innerWidth > 500
-			? '10px'
-			: '0px'};display: flex;flex-direction: column;"
-	>
+	<div class="cell">
 		<!--
-			DrawMap has no createEventDispatcher, so the on:update_center /
-			on:update_zoom handlers that used to be here never fired. The sync is
-			one-way by design: ReferenceMap (Before) drives DrawMap (After).
-		-->
+				DrawMap has no createEventDispatcher, so the on:update_center /
+				on:update_zoom handlers that used to be here never fired. The sync is
+				one-way by design: ReferenceMap (Before) drives DrawMap (After).
+			-->
 		<DrawMap
 			container="draw_new_map"
 			bind:ref={new_map}
@@ -714,7 +701,6 @@
 					bind:index_type={current_index_type}
 					bind:threshold={current_target}
 					data={new_data}
-					width={innerWidth > 500 ? 400 : innerWidth / 2}
 				/>
 			{/if}
 		</DrawMap>
@@ -722,6 +708,34 @@
 </div>
 
 <style>
+	/*
+		Both maps are always present and always equal halves. The After column
+		was `visibility: hidden` until a cell was picked, which still reserves
+		its box — so Before was permanently half-width with nothing beside it.
+		The grid also replaces an `innerWidth > 500` row/column switch, one of
+		ten JS breakpoints that re-rendered their component on every resize.
+	*/
+	.pair {
+		flex-grow: 1;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 2px;
+		min-height: 0;
+	}
+
+	.cell {
+		position: relative;
+		overflow: hidden;
+		min-width: 0;
+	}
+
+	@media (max-width: 41.99rem) {
+		.pair {
+			grid-template-columns: 1fr;
+			grid-template-rows: 1fr 1fr;
+		}
+	}
+
 	div.map_header {
 		position: absolute;
 		top: 0px;
