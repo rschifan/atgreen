@@ -1,14 +1,16 @@
 <!-- newgreen_mindis_osm, newgreen_exposure_esa,   newgreen_per_person_osm -->
 
 <script lang="ts">
-	import Legend from './plotting/Legend.svelte';
 	import { format } from 'd3';
+	import ToolPane from './ToolPane.svelte';
 	import { mapbox } from 'mapbox-gl';
 	import {
 		Button,
-		ComboBox,
-		MultiSelect,
+		Checkbox,
+		ContentSwitcher,
+		FormGroup,
 		Slider,
+		Switch,
 		ToastNotification
 	} from 'carbon-components-svelte';
 	import union from '@turf/union';
@@ -24,7 +26,12 @@
 		newgreen_perperson_osm,
 		newgreen_mindistance_osm
 	} from '../js/api';
-	import { AccessibilityIndexType, ClassificationScheme } from '../js/types';
+	import {
+		AccessibilityIndexType,
+		DEFAULT_TARGET,
+		INDEX_UNIT,
+		ClassificationScheme
+	} from '../js/types';
 	import { current_city, loading } from '../stores/stores';
 	import DrawMap from './maps/DrawMap.svelte';
 	import ReferenceMap from './maps/ReferenceMap.svelte';
@@ -39,13 +46,6 @@
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../js/layers';
-	import bbox from '@turf/bbox';
-
-	let accesseibility_index_types = [
-		{ id: AccessibilityIndexType.MINIMUM_DISTANCE, text: 'minimum distance' },
-		{ id: AccessibilityIndexType.EXPOSURE, text: 'exposure' },
-		{ id: AccessibilityIndexType.PER_PERSON, text: 'per person' }
-	];
 
 	let green_types = [
 		{ id: 'parks', text: 'parks' },
@@ -86,8 +86,6 @@
 	let empty_resultset_error = false;
 
 	let green_types_combobox_disabled = false;
-	let innerHeight: number;
-	let innerWidth: number;
 	let cell_id: number | undefined = undefined;
 	let unsubscribe_current_city: Unsubscriber;
 
@@ -245,21 +243,9 @@
 
 	function update_colormap(accessibility_values: number[], map: mapbox.Map, layer: mapbox.Layer) {
 		if (map && map.getLayer(layer)) {
-			let threshold: number;
-			switch (current_index_type) {
-				case AccessibilityIndexType.MINIMUM_DISTANCE:
-					threshold = 5;
-					break;
-				case AccessibilityIndexType.EXPOSURE:
-					threshold = 0.5;
-					break;
-				case AccessibilityIndexType.PER_PERSON:
-					threshold = 9;
-					break;
-				default:
-					threshold = 0;
-					break;
-			}
+			// One table, shared with Create and with the onMount switch that used to
+			// sit below — which disagreed with this one on two of three values.
+			const threshold = DEFAULT_TARGET[current_index_type] ?? 5;
 
 			map.setPaintProperty(
 				layer,
@@ -349,21 +335,16 @@
 		// remove all layers and sources
 	});
 
-	onMount(() => {
-		switch (current_index_type) {
-			case AccessibilityIndexType.MINIMUM_DISTANCE:
-				current_target = 5;
-				break;
-			case AccessibilityIndexType.EXPOSURE:
-				current_target = 1;
-				break;
-			case AccessibilityIndexType.PER_PERSON:
-				current_target = 10;
-				break;
-			default:
-				current_target = 5;
-		}
+	/*
+		Reactive, not a switch in onMount. That hook ran once, when
+		`current_index_type` is always 0, so its exposure and per-person branches
+		were dead — and its values disagreed with the ones update_colormap used
+		for the very same thing (1 vs 0.5 ha, 10 vs 9 sq m). /rpc/getindexes says
+		0.5 and 9, so update_colormap was right and this was not.
+	*/
+	$: current_target = DEFAULT_TARGET[current_index_type] ?? 5;
 
+	onMount(() => {
 		unsubscribe_current_city = current_city.subscribe((value) => {
 			cell_id = undefined;
 			new_data = empty_geojson;
@@ -554,57 +535,58 @@
 	}
 </script>
 
-<svelte:window bind:innerHeight bind:innerWidth />
+<ToolPane>
+	<svelte:fragment slot="rail">
+		<div class="grp">
+			<span class="bx--label">Index type</span>
+			<ContentSwitcher
+				bind:selectedIndex={current_index_type}
+				on:change={() => {
+					reset();
+				}}
+			>
+				<Switch text="Distance" />
+				<Switch text="Exposure" />
+				<Switch text="Per person" />
+			</ContentSwitcher>
+		</div>
 
-<div class="blocks-container">
-	<div class="block">
-		<ComboBox
-			style="min-width: 150px;"
-			titleText="Index type"
-			placeholder="Select the type of accessibility index"
-			bind:selectedId={current_index_type}
-			items={accesseibility_index_types}
-			on:select={() => {
-				reset();
-			}}
-		/>
-	</div>
+		<FormGroup legendText="Green area types">
+			{#each green_types as t (t.id)}
+				<Checkbox
+					labelText={t.text}
+					value={t.id}
+					bind:group={current_green_types}
+					disabled={green_types_combobox_disabled}
+					on:check={() => {
+						reset();
+					}}
+				/>
+			{/each}
+		</FormGroup>
 
-	<div class="block">
-		<MultiSelect
-			selectedIds={current_green_types}
-			titleText="Green area types"
-			label="Select green types"
-			items={green_types}
-			disabled={green_types_combobox_disabled}
-			on:select={(event) => {
-				// The handler used to drop event.detail.selectedIds, so this control
-				// cleared the map and then recomputed with the same green types it
-				// started with. Explore.svelte already did this correctly.
-				current_green_types = event.detail.selectedIds;
-				reset();
-			}}
-		/>
-	</div>
-
-	<div class="block">
 		<Slider
-			labelText="Minimum size (ha)"
+			fullWidth
+			hideTextInput
+			labelText="Minimum size — {current_greenarea_size} ha"
 			min={0.5}
-			max={4}
-			maxLabel="4"
+			max={50}
+			step={0.5}
+			minLabel="0.5"
+			maxLabel="50"
 			bind:value={current_greenarea_size}
 			on:change={() => {
 				reset();
 			}}
 		/>
-	</div>
 
-	<div class="block">
 		<Slider
-			labelText="Time budget (min)"
+			fullWidth
+			hideTextInput
+			labelText="Time budget — {current_time_budget} min"
 			min={0}
 			max={15}
+			minLabel="0"
 			maxLabel="15"
 			bind:value={current_time_budget}
 			disabled={time_budget_slider_disabled}
@@ -612,100 +594,99 @@
 				reset();
 			}}
 		/>
-	</div>
 
-	<div class="block">
 		<Button
 			disabled={!create_button_disabled}
-			tooltipPosition="right"
-			tooltipAlignment="end"
 			icon={PlayFilled}
-			iconDescription="Create your own accessibility index"
+			iconDescription="Draw your own accessibility index"
 			on:click={() => {
-				if ($current_city) {
-					cell_id = undefined;
-					compute();
-				}
+				compute();
 			}}>Draw</Button
 		>
-	</div>
-</div>
 
-{#if empty_resultset_error}
-	<ToastNotification
-		fullWidth
-		lowContrast
-		kind="error"
-		title="Impossible to generate the accessibility index"
-		subtitle="No park with these characteristics found in {$current_city.text}."
-		caption={new Date().toLocaleString()}
-		on:close={() => {
-			empty_resultset_error = false;
-		}}
-	/>
-{/if}
-
-<div class="pair">
-	<div class="cell">
-		<ReferenceMap
-			container="draw_reference_map"
-			bind:ref={reference_map}
-			bind:mapLoaded={referenceMapLoaded}
-			bind:styleLoaded={referenceMapStyleLoaded}
-			on:new_green_cell={handle_click_new_cell}
-			on:update_center={update_center}
-			on:update_zoom={update_zoom}
-		>
-			<div class="map_header">
-				<p style="background-color: gray;text-align: center;width:50%;margin: auto;">Before</p>
-				{#if reference_data && reference_data.features && reference_data.features.length > 0}
-					<p style="background-color: black;text-align: center;">
-						Click on a cell to greenify the area.
-					</p>
-				{:else}
-					<p style="background-color: black;text-align: center;">
-						Personalize your accessibility index and click Draw.
-					</p>
-				{/if}
-			</div>
-
+		<p class="hint">
 			{#if reference_data && reference_data.features && reference_data.features.length > 0}
-				<BaseLegend
-					bind:index_type={current_index_type}
-					bind:threshold={current_target}
-					data={reference_data}
-				/>
+				Click a cell on the Before map to greenify it.
+			{:else}
+				Choose your parameters and press Draw.
 			{/if}
-		</ReferenceMap>
-	</div>
+		</p>
 
-	<div class="cell">
-		<!--
+		{#if empty_resultset_error}
+			<ToastNotification
+				lowContrast
+				kind="error"
+				title="No index generated"
+				subtitle="No park with these characteristics found in {$current_city.text}."
+				on:close={() => {
+					empty_resultset_error = false;
+				}}
+			/>
+		{/if}
+	</svelte:fragment>
+
+	<div class="pair">
+		<div class="cell">
+			<ReferenceMap
+				container="draw_reference_map"
+				bind:ref={reference_map}
+				bind:mapLoaded={referenceMapLoaded}
+				bind:styleLoaded={referenceMapStyleLoaded}
+				on:new_green_cell={handle_click_new_cell}
+				on:update_center={update_center}
+				on:update_zoom={update_zoom}
+			>
+				<div class="map_header">
+					<p style="background-color: gray;text-align: center;width:50%;margin: auto;">Before</p>
+					{#if reference_data && reference_data.features && reference_data.features.length > 0}
+						<p style="background-color: black;text-align: center;">
+							Click on a cell to greenify the area.
+						</p>
+					{:else}
+						<p style="background-color: black;text-align: center;">
+							Personalize your accessibility index and click Draw.
+						</p>
+					{/if}
+				</div>
+
+				{#if reference_data && reference_data.features && reference_data.features.length > 0}
+					<BaseLegend
+						bind:index_type={current_index_type}
+						bind:threshold={current_target}
+						data={reference_data}
+					/>
+				{/if}
+			</ReferenceMap>
+		</div>
+
+		<div class="cell">
+			<!--
 				DrawMap has no createEventDispatcher, so the on:update_center /
 				on:update_zoom handlers that used to be here never fired. The sync is
 				one-way by design: ReferenceMap (Before) drives DrawMap (After).
 			-->
-		<DrawMap
-			container="draw_new_map"
-			bind:ref={new_map}
-			bind:mapLoaded={newMapLoaded}
-			bind:styleLoaded={newMapStyleLoaded}
-		>
-			{#if new_data && new_data.features && new_data.features.length > 0}
-				<div class="map_header">
-					<p style="background-color: gray;text-align: center;width:50%;margin: auto;">After</p>
-					<!-- <p>Hover around the selected cell to inspect the differences in accessibility.</p> -->
-				</div>
+			<DrawMap
+				container="draw_new_map"
+				bind:ref={new_map}
+				bind:mapLoaded={newMapLoaded}
+				bind:styleLoaded={newMapStyleLoaded}
+			>
+				{#if new_data && new_data.features && new_data.features.length > 0}
+					<div class="map_header">
+						<p style="background-color: gray;text-align: center;width:50%;margin: auto;">After</p>
+						<!-- <p>Hover around the selected cell to inspect the differences in accessibility.</p> -->
+					</div>
 
-				<BaseLegend
-					bind:index_type={current_index_type}
-					bind:threshold={current_target}
-					data={new_data}
-				/>
-			{/if}
-		</DrawMap>
-	</div>
-</div>
+					<BaseLegend
+						bind:index_type={current_index_type}
+						bind:threshold={current_target}
+						data={new_data}
+					/>
+				{/if}
+			</DrawMap>
+		</div>
+	</div></ToolPane
+>
 
 <style>
 	/*
@@ -716,11 +697,16 @@
 		ten JS breakpoints that re-rendered their component on every resize.
 	*/
 	.pair {
-		flex-grow: 1;
+		/*
+			Absolute, not flex-grow: the stage is a positioning context rather than
+			a flex container, and the map roots inside these cells are themselves
+			absolute, so a content-sized grid collapses to nothing.
+		*/
+		position: absolute;
+		inset: 0;
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 2px;
-		min-height: 0;
 	}
 
 	.cell {

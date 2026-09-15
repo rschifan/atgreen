@@ -43,6 +43,20 @@
 		border-right: 1px solid var(--cds-ui-03, #393939);
 	}
 
+	/*
+		Carbon's `.bx--form-item` is `flex: 1 1 auto`, so a Slider dropped straight
+		into a flex column stretches to fill it and pushes everything after it to
+		the bottom of the rail. The rail's own `gap` handles the spacing, so its
+		children size to content and Carbon's own margins are stood down.
+	*/
+	.rail > :global(*) {
+		flex: 0 0 auto;
+	}
+
+	.rail :global(.bx--fieldset) {
+		margin-bottom: 0;
+	}
+
 	.stage {
 		position: relative;
 		flex: 1 1 auto;

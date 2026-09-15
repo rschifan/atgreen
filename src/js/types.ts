@@ -7,6 +7,30 @@ export enum AccessibilityIndexType {
 	EXPOSURE,
 	PER_PERSON
 }
+/**
+ * The default target per index type, and the units it is measured in.
+ *
+ * There were two disagreeing copies of this. `Draw`'s onMount switch said
+ * {distance 5, exposure 1, per-person 10} while its own `update_colormap` said
+ * {5, 0.5, 9}, and `Create` carried a third copy of the first set. /rpc/getindexes
+ * settles it: ESA (exposure) has target 0.5 and IPP (per person) has 9, so the
+ * update_colormap values were the correct ones and the onMount switches were not.
+ *
+ * Both switches also ran only in onMount, where `current_index_type` is always 0 —
+ * so their exposure and per-person branches were unreachable either way.
+ */
+export const DEFAULT_TARGET: Record<number, number> = {
+	[AccessibilityIndexType.MINIMUM_DISTANCE]: 5,
+	[AccessibilityIndexType.EXPOSURE]: 0.5,
+	[AccessibilityIndexType.PER_PERSON]: 9
+};
+
+export const INDEX_UNIT: Record<number, string> = {
+	[AccessibilityIndexType.MINIMUM_DISTANCE]: 'min',
+	[AccessibilityIndexType.EXPOSURE]: 'ha',
+	[AccessibilityIndexType.PER_PERSON]: 'sq m'
+};
+
 export const ClassificationScheme = { LINEAR: 'linear', LOGARITHMIC: 'logarithmic' };
 export const UnitType = { SQUARE_METERS: 'mq', MINUTES: 'min', HECTARS: 'ha' };
 

@@ -1,29 +1,26 @@
 <script lang="ts">
 	import {
 		Button,
-		ComboBox,
-		MultiSelect,
+		Checkbox,
+		ContentSwitcher,
+		FormGroup,
 		Slider,
+		Switch,
+		Tag,
 		ToastNotification
 	} from 'carbon-components-svelte';
-	import Grid from 'carbon-icons-svelte/lib/Grid.svelte';
 
 	import { PlayFilled } from 'carbon-icons-svelte';
 	import { format, max, min } from 'd3';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { get_indexposure_esa, get_indmindistance_osm, get_indperperson_osm } from '../js/api';
-	import { AccessibilityIndexType } from '../js/types';
+	import { AccessibilityIndexType, DEFAULT_TARGET, INDEX_UNIT } from '../js/types';
 	import { current_city, loading } from '../stores/stores';
 	import CreateMap from './maps/CreateMap.svelte';
+	import ToolPane from './ToolPane.svelte';
 	import BaseLegend from './plotting/BaseLegend.svelte';
 	import { get_green_types_code } from '../js/utils';
-
-	let accesseibility_index_types = [
-		{ id: AccessibilityIndexType.MINIMUM_DISTANCE, text: 'minimum distance' },
-		{ id: AccessibilityIndexType.EXPOSURE, text: 'exposure' },
-		{ id: AccessibilityIndexType.PER_PERSON, text: 'per person' }
-	];
 
 	let green_types = [
 		{ id: 'parks', text: 'parks' },
@@ -68,25 +65,7 @@
 	$: green_types_combobox_disabled = current_index_type == AccessibilityIndexType.EXPOSURE;
 	$: time_budget_slider_disabled = current_index_type == AccessibilityIndexType.MINIMUM_DISTANCE;
 
-	// AccessibilityIndexType.MINIMUM_DISTANCE is 0, which is falsy, so this block
-	// never ran for it: switching to exposure (ha) and back left the label reading
-	// "ha" for a value in minutes.
-	$: if (current_index_type !== undefined && current_index_type !== null) {
-		switch (current_index_type) {
-			case AccessibilityIndexType.MINIMUM_DISTANCE:
-				unit = 'min';
-				break;
-			case AccessibilityIndexType.EXPOSURE:
-				unit = 'ha';
-				break;
-			case AccessibilityIndexType.PER_PERSON:
-				unit = 'sq m';
-				break;
-			default:
-				unit = 'min';
-				break;
-		}
-	}
+	$: unit = INDEX_UNIT[current_index_type] ?? 'min';
 
 	$: if (data && data.features.length > 0) {
 		const accessibility_values: number[] = [...data.features.map((o: any) => o.properties.v)];
@@ -103,21 +82,15 @@
 		if (unsubscribe_current_city) unsubscribe_current_city();
 	});
 
-	onMount(() => {
-		switch (current_index_type) {
-			case AccessibilityIndexType.MINIMUM_DISTANCE:
-				current_target = 5;
-				break;
-			case AccessibilityIndexType.EXPOSURE:
-				current_target = 1;
-				break;
-			case AccessibilityIndexType.PER_PERSON:
-				current_target = 10;
-				break;
-			default:
-				current_target = 5;
-		}
+	/*
+		Reactive, not a switch in onMount. That hook ran once, when
+		`current_index_type` is always 0, so its exposure and per-person branches
+		were unreachable and the target stayed on the distance default whatever
+		index you picked. Its values also disagreed with the ones the map used.
+	*/
+	$: current_target = DEFAULT_TARGET[current_index_type] ?? 5;
 
+	onMount(() => {
 		unsubscribe_current_city = current_city.subscribe((value) => {
 			data = empty_geojson;
 
@@ -217,126 +190,114 @@
 			cells_satisfying_target = cells.length / n;
 		}
 	}
-
-	let innerHeight: number;
-	let innerWidth: number;
 </script>
 
-<svelte:window bind:innerHeight bind:innerWidth />
+<ToolPane>
+	<svelte:fragment slot="rail">
+		<!--
+			`ContentSwitcher` for a three-value choice: a dropdown cost two clicks to
+			show three words, and this one had no `on:select`, so stale results stayed
+			on the map after switching index.
+		-->
+		<div class="grp">
+			<span class="bx--label">Index type</span>
+			<ContentSwitcher bind:selectedIndex={current_index_type}>
+				<Switch text="Distance" />
+				<Switch text="Exposure" />
+				<Switch text="Per person" />
+			</ContentSwitcher>
+		</div>
 
-<div class="blocks-container">
-	<div class="block">
-		<ComboBox
-			style="min-width: 150px;"
-			titleText="Index type"
-			placeholder="Select the type of accessibility index"
-			bind:selectedId={current_index_type}
-			items={accesseibility_index_types}
-		/>
-	</div>
+		<!--
+			`bind:group` is two-way by construction. This was a MultiSelect passed
+			`selectedIds` one-way with no bind and no on:select, so nothing the user
+			ticked ever reached `current_green_types` and every request asked for all
+			three types regardless. There is no one-way variant of this to write.
+		-->
+		<FormGroup legendText="Green area types">
+			{#each green_types as t (t.id)}
+				<Checkbox
+					labelText={t.text}
+					value={t.id}
+					bind:group={current_green_types}
+					disabled={green_types_combobox_disabled}
+				/>
+			{/each}
+		</FormGroup>
 
-	<div class="block">
-		<MultiSelect
-			selectedIds={current_green_types}
-			titleText="Green area types"
-			label="Select green types"
-			items={green_types}
-			disabled={green_types_combobox_disabled}
-		/>
-	</div>
-
-	<div class="block">
+		<!--
+			`hideTextInput` removes Carbon's `<input type="number">`, which rendered
+			0.5 as "0,5" under an it-IT locale. Passing both end labels fixes the
+			asymmetry of giving only `maxLabel`.
+		-->
 		<Slider
-			labelText="Minimum size (ha)"
+			fullWidth
+			hideTextInput
+			labelText="Minimum size — {current_greenarea_size} ha"
 			min={0.5}
 			max={50}
+			step={0.5}
+			minLabel="0.5"
 			maxLabel="50"
 			bind:value={current_greenarea_size}
 		/>
-	</div>
 
-	<div class="block">
 		<Slider
-			labelText="Time budget (min)"
+			fullWidth
+			hideTextInput
+			labelText="Time budget — {current_time_budget} min"
 			min={0}
 			max={15}
+			minLabel="0"
 			maxLabel="15"
 			bind:value={current_time_budget}
 			disabled={time_budget_slider_disabled}
 		/>
-	</div>
 
-	<div class="block">
 		<Button
 			disabled={!create_button_disabled}
-			tooltipPosition="right"
-			tooltipAlignment="end"
 			icon={PlayFilled}
 			iconDescription="Create your own accessibility index"
 			on:click={() => {
-				if ($current_city) {
-					compute();
-				}
+				if ($current_city) compute();
 			}}>Create</Button
 		>
-	</div>
-</div>
 
-{#if empty_resultset_error}
-	<ToastNotification
-		fullWidth
-		lowContrast
-		kind="error"
-		title="Impossible to generate the accessibility index"
-		subtitle="No park with these characteristics found in {$current_city.text}."
-		caption={new Date().toLocaleString()}
-		on:close={() => {
-			empty_resultset_error = false;
-		}}
-	/>
-{/if}
+		{#if empty_resultset_error}
+			<ToastNotification
+				lowContrast
+				kind="error"
+				title="No index generated"
+				subtitle="No park with these characteristics found in {$current_city.text}."
+				on:close={() => {
+					empty_resultset_error = false;
+				}}
+			/>
+		{/if}
 
-{#if data && data.features.length > 0}
-	<div>
-		<p>
-			Select a target for your index to dinamically see which areas of the city meet the target.
-		</p>
-	</div>
-
-	<div class="blocks-container">
-		<div class="block">
+		{#if data && data.features.length > 0}
 			<Slider
-				labelText={`Target (${unit})`}
+				fullWidth
+				hideTextInput
+				labelText="Target — {current_target} {unit}"
 				bind:min={current_target_min}
 				bind:max={current_target_max}
-				maxLabel={current_target_max.toString()}
+				minLabel={String(current_target_min)}
+				maxLabel={String(current_target_max)}
 				value={current_target}
 				on:change={(ev) => {
 					current_target = ev.detail;
 					update_cells_selected();
 				}}
 			/>
-		</div>
 
-		<div class="block">
-			<Grid size="1rem" style="margin-top: auto;" />
-			<span
-				style="margin-top: auto; 
-					padding-left: 0.5rem; font-size: 1rem; height:1rem;"
-			>
-				{format('.1%')(cells_satisfying_target)}
-			</span>
-		</div>
-	</div>
+			<Tag type="green">{format('.1%')(cells_satisfying_target)} of cells meet the target</Tag>
 
-	<!-- <TooltipIcon
-				tooltipText="Carbon is an open source design system by IBM."
-				icon={Grid}
-			/> -->
-{/if}
+			<BaseLegend index_type={current_index_type} bind:threshold={current_target} {data} />
+		{/if}
+	</svelte:fragment>
 
-{#if data && data.features.length > 0}
-	<div style="position: relative; flex-grow: 1;">
+	{#if data && data.features.length > 0}
 		<CreateMap
 			container="custom_accessibility_index_map"
 			bind:ref={map}
@@ -348,44 +309,30 @@
 			size={current_greenarea_size}
 			distance={current_time_budget}
 			bind:threshold={current_target}
-		>
-			<BaseLegend
-				index_type={current_index_type}
-				bind:threshold={current_target}
-				{data}
-				width={innerWidth > 500 ? 400 : innerWidth / 2}
-			/>
-		</CreateMap>
-	</div>
-
-	<!-- <BaseMap
-				container="custom_accessibility_index_map"
-				bind:ref={map}
-				bind:mapLoaded
-				bind:styleLoaded
-			>
-				<BaseLegend
-					index_type={current_index_type}
-					threshold={current_target}
-					{data}
-					width={innerWidth > 500 ? 400 : innerWidth / 2}
-				/>
-			</BaseMap> -->
-
-	<!-- {#if map && mapLoaded && styleLoaded}
-			<NewIndexLayer
-				bind:map
-				bind:data
-				index_type={current_index_type}
-				{unit}
-				size={current_greenarea_size}
-				distance={current_time_budget}
-				bind:threshold={current_target}
-			/>
-		{/if} -->
-{/if}
+		/>
+	{:else}
+		<p class="empty">Choose your parameters and press Create.</p>
+	{/if}
+</ToolPane>
 
 <style>
+	.grp {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.empty {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--cds-text-03, #6f6f6f);
+		text-align: center;
+		padding: 1rem;
+	}
+
 	div {
 		padding: 10px 0px;
 	}
