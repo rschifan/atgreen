@@ -70,7 +70,12 @@
 	// Picking a new city keeps the section you were looking at rather than
 	// dropping you back on Measure every time.
 	$: section = SECTIONS.find((s) => $page.url.pathname.endsWith('/' + s)) ?? 'measure';
-	$: cityPath = $page.params.city;
+	// SvelteKit hands params back decoded and `resolve()` inserts them without
+	// re-encoding, so this has to go back through toCityPath or the header-panel
+	// links come out raw where the tab links are encoded. No city name currently
+	// contains a character that changes URL meaning, but the two link builders
+	// disagreeing is the kind of thing that stops being harmless quietly.
+	$: cityPath = toCityPath($page.params.city ?? '');
 </script>
 
 <Header

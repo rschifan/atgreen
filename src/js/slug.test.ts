@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { findCityByParam, findSlugCollisions, toCityPath, toSlug } from './slug';
+import { findCityByParam, findSlugCollisions, safeDecode, toCityPath, toSlug } from './slug';
 
 const feature = (name: string) => ({ properties: { name } });
+
+describe('safeDecode', () => {
+	it('decodes ordinary escapes', () => {
+		expect(safeDecode('W%C3%BCrzburg')).toBe('Würzburg');
+		expect(safeDecode('Turin')).toBe('Turin');
+	});
+
+	// A lone % is a legal URL character but not a legal escape. The not-found
+	// notice interpolates this straight into the page, so a throw here is a
+	// crashed page where a "no such city" message belongs.
+	it('returns the input rather than throwing on a malformed escape', () => {
+		expect(() => decodeURIComponent('%')).toThrow();
+		expect(safeDecode('%')).toBe('%');
+		expect(safeDecode('%zz')).toBe('%zz');
+		expect(safeDecode('100%')).toBe('100%');
+	});
+});
 
 describe('toCityPath', () => {
 	it('leaves plain names alone', () => {
