@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { refit_zoom } from '../../js/utils';
-	import 'mapbox-gl/dist/mapbox-gl.css';
 	import { createEventDispatcher, onDestroy, onMount, setContext } from 'svelte';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
 	import { current_city, hovered_feature } from '../../stores/stores.js';

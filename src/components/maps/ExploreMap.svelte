@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
 	import { format } from 'd3';
-	import 'mapbox-gl/dist/mapbox-gl.css';
 	import { afterUpdate, onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR } from '../../js/colors';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
-	import { adjust_zoom, create_empty_geojson, refit_zoom } from '../../js/utils';
+	import { adjust_zoom, create_empty_geojson, refit_zoom, html } from '../../js/utils';
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
 
@@ -271,17 +270,23 @@
 		}
 	}
 	function create_html_popup(feature: {}) {
-		let str = `<div class="popup-container">`;
+		// `html` escapes every interpolation. This string goes to Mapbox's setHTML,
+		// which assigns to innerHTML, and `osm_name` is OpenStreetMap free text —
+		// anyone with an account can rename a park to markup. The enforced CSP
+		// carries script-src 'unsafe-inline', so an injected handler would run.
+		let str = html`<div class="popup-container"></div>`;
 
 		if (feature.properties.osm_name)
-			str += `<span class="popup-ga-name">${feature.properties.osm_name}</span>`;
+			str += html`<span class="popup-ga-name">${feature.properties.osm_name}</span>`;
 
-		str += `<div><span class="attr-name">type</span><span class="attr-value">${
-			green_types_dict[feature.properties.osm_value]
-		}</span></div>`;
-		str += `<div><span class="attr-name">size</span><span class="attr-value">${format('.2f')(
-			feature.properties.size
-		)} ha</span></div>`;
+		str += html`<div>
+			<span class="attr-name">type</span
+			><span class="attr-value">${green_types_dict[feature.properties.osm_value]}</span>
+		</div>`;
+		str += html`<div>
+			<span class="attr-name">size</span
+			><span class="attr-value">${format('.2f')(feature.properties.size)} ha</span>
+		</div>`;
 
 		str += `</div>`;
 

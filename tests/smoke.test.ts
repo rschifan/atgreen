@@ -302,6 +302,29 @@ test.describe('ATGreen smoke', () => {
 			expect(box.stageTop).toBeGreaterThanOrEqual(box.railBottom - 2);
 		});
 
+		test('map CSS is served from this origin, not the Mapbox CDN', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/');
+			await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 20000 });
+
+			// The stub fulfils every **/api.mapbox.com/** request, so a missing
+			// stylesheet cannot fail any other assertion here — this one names the
+			// thing directly. The landing globe is the case that matters: it imported
+			// no CSS of its own and rendered only because app.html linked the CDN copy.
+			const sheets = await page.$$eval('link[rel=stylesheet]', (ls) =>
+				ls.map((l) => (l as HTMLLinkElement).href)
+			);
+			expect(sheets.filter((h) => h.includes('api.mapbox.com'))).toHaveLength(0);
+
+			// Proof the stylesheet actually applied: Mapbox's corner containers are
+			// absolutely positioned by it, and static without it.
+			const pos = await page.evaluate(() => {
+				const el = document.querySelector('.mapboxgl-ctrl-bottom-left');
+				return el ? getComputedStyle(el).position : null;
+			});
+			expect(pos, 'mapbox control container position').toBe('absolute');
+		});
+
 		test('the index tiles are reachable and operable by keyboard', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');

@@ -2,7 +2,6 @@
 	import centroid from '@turf/centroid';
 	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
 	import { format } from 'd3';
-	import 'mapbox-gl/dist/mapbox-gl.css';
 	import { onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import {
