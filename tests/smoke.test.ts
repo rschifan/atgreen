@@ -322,7 +322,19 @@ test.describe('ATGreen smoke', () => {
 			const sheets = await page.$$eval('link[rel=stylesheet]', (ls) =>
 				ls.map((l) => (l as HTMLLinkElement).href)
 			);
-			expect(sheets.filter((h) => h.includes('api.mapbox.com'))).toHaveLength(0);
+			// Compare the parsed hostname, not a substring: `includes('api.mapbox.com')`
+			// also matches https://evil.example/api.mapbox.com and misses
+			// https://API.MAPBOX.COM. CodeQL flagged exactly this on the first version
+			// of this line, and it was right — substring-matching a URL is the wrong
+			// idiom even where, as here, the assertion is that none exist.
+			const external = sheets.filter((h) => {
+				try {
+					return new URL(h).hostname.toLowerCase() === 'api.mapbox.com';
+				} catch {
+					return false; // a relative or malformed href is not a third-party host
+				}
+			});
+			expect(external, `third-party stylesheets: ${external.join(', ')}`).toHaveLength(0);
 
 			// Proof the stylesheet actually applied: Mapbox's corner containers are
 			// absolutely positioned by it, and static without it.
