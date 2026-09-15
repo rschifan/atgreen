@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -90,6 +91,13 @@ async function selectTurin(page: Page) {
 	await page.getByRole('menuitem', { name: 'Turin' }).click();
 	await page.waitForURL('**/Turin/measure');
 }
+
+/**
+ * Axe violation ceilings, lowered as they are fixed — never raised. Recorded here
+ * rather than in .quality-baseline.json because that file is read by a node script
+ * with no browser; these need a running page.
+ */
+const A11Y_BUDGET = { landing: 0, measure: 0 };
 
 test.describe('ATGreen smoke', () => {
 	test('landing page renders the question and the city picker', async ({ page }) => {
@@ -339,6 +347,54 @@ test.describe('ATGreen smoke', () => {
 			await page.keyboard.press('Enter');
 			await expect(tiles.nth(3)).toHaveAttribute('aria-pressed', 'true');
 			await expect(tiles.first()).toHaveAttribute('aria-pressed', 'false');
+		});
+	});
+
+	/*
+		Automated accessibility checks.
+
+		University of Turin is an EU public-sector body, so Directive (EU) 2016/2102
+		and EN 301 549 make WCAG 2.1 AA a legal obligation rather than a preference.
+		There was no automated check of any kind before this.
+
+		Ratcheted, not gated: a hard zero on day one would be permanently red and
+		switched off within a week — the same reasoning as the svelte-check and
+		eslint baselines, both of which have since come down a long way. Axe finds a
+		fraction of real barriers, so a green run here is a floor, not a pass.
+	*/
+	test.describe('accessibility', () => {
+		const scan = (page: Page) =>
+			new AxeBuilder({ page })
+				.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+				// The map is a WebGL canvas; axe cannot see inside it and flags the
+				// container. Keyboard access to per-cell data is a known open gap,
+				// tracked separately — excluding it here keeps the number meaningful
+				// rather than pinned to one unfixable element.
+				.exclude('.mapboxgl-canvas-container')
+				.analyze();
+
+		test('the landing page stays within its violation budget', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/');
+			await expect(page.getByRole('button', { name: /Select a city/ })).toBeVisible();
+
+			const { violations } = await scan(page);
+			const summary = violations.map((v) => `${v.id} (${v.nodes.length}) [${v.impact}]`);
+			expect(violations.length, `landing: ${summary.join(', ')}`).toBeLessThanOrEqual(
+				A11Y_BUDGET.landing
+			);
+		});
+
+		test('Measure stays within its violation budget', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/measure');
+			await expect(page.locator('button.tile').first()).toBeVisible({ timeout: 20000 });
+
+			const { violations } = await scan(page);
+			const summary = violations.map((v) => `${v.id} (${v.nodes.length}) [${v.impact}]`);
+			expect(violations.length, `measure: ${summary.join(', ')}`).toBeLessThanOrEqual(
+				A11Y_BUDGET.measure
+			);
 		});
 	});
 

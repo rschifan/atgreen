@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 
-	import buffer from '@turf/buffer';
 	import { mapbox } from '../../js/mapbox';
 	import { current_city } from '../../stores/stores';
 
@@ -290,9 +289,16 @@
 					selected_cell_id = selected_feature.id;
 					move_center(selected_feature.geometry.coordinates);
 
-					const buffered_feature = buffer(selected_feature, 15);
+					// The point itself, not a 15 km buffer around it. The only layer
+					// reading this source is SELECTED_CITY_LABEL_LAYER, a symbol layer —
+					// and a symbol anchors a Point at the point and a Polygon at its
+					// centre, which for a buffer around that same point is the point. The
+					// fill-extrusion that would have drawn the polygon is commented out
+					// above. So the buffer changed nothing on screen and pulled
+					// @turf/buffer -> turf-jsts into the landing chunk: 375 KB raw,
+					// 85 KB gzipped, for a label position it did not move.
 					if (map && map.getSource(SELECTED_CITY_SOURCE))
-						map.getSource(SELECTED_CITY_SOURCE).setData(buffered_feature);
+						map.getSource(SELECTED_CITY_SOURCE).setData(selected_feature);
 				}
 			}
 		});

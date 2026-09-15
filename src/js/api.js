@@ -96,20 +96,6 @@ export const get_metadata = alovaInstance.Get('/getindexes', {
 	}
 });
 
-export const get_summary = alovaInstance.Get('/getcitiesboundaries', {
-	headers: {
-		'Content-Type': 'application/json;charset=UTF-8'
-	}
-});
-
-export const get_closestpark_osm = (cityname, source, pga_size) =>
-	alovaInstance.Get('/closestpark_osm', {
-		headers: {
-			'Content-Type': 'application/json;charset=UTF-8'
-		},
-		params: { cityname: cityname, source: source, pga_size: pga_size }
-	});
-
 export const get_greenareas_osm = (cityname) =>
 	alovaInstance.Get('/queryosmgreen', {
 		headers: {
