@@ -105,7 +105,17 @@
 				if (name) goto(resolve(ROUTES[section], { city: toCityPath(name) }));
 			}}
 		/>
-		<HeaderAction bind:isOpen transition={{ duration: 200 }}>
+		<!--
+			`iconDescription` is what gives this button an accessible name: Carbon
+			renders it as assistive text inside the button. Without it the control is
+			an icon with no name at all — axe reports `button-name`, critical, and a
+			screen-reader user is told only "button".
+		-->
+		<HeaderAction
+			bind:isOpen
+			iconDescription="Sections and project links"
+			transition={{ duration: 200 }}
+		>
 			<HeaderPanelLinks>
 				{#if cityPath}
 					<HeaderPanelDivider>Sections</HeaderPanelDivider>

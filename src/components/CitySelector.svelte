@@ -17,10 +17,6 @@
 	let styleLoaded = false;
 	let open = false;
 
-	// let summary_request = useRequest(get_summary, {
-	// 	initialData: []
-	// });
-
 	// let unsubscribe_summary_request = summary_request.data.subscribe((value) => {
 	// 	if (value && value.length > 0) {
 	// 		console.log('summary:', value);
@@ -52,7 +48,7 @@
 
 <div style="position: absolute; width:100%;top:14%;text-align: center;z-index:100;">
 	<div class="subtitle">
-		How <TooltipDefinition TooltipDefinition align="start">
+		How <TooltipDefinition align="start">
 			<p slot="tooltip" class="tooltip">
 				<span class="highlighted underline">
 					There isn't a single definition of accessibility.
