@@ -19,6 +19,21 @@
 /** The shape this module needs from a city feature: just its name. */
 export type NamedFeature = { properties?: { name?: string } };
 
+/**
+ * `decodeURIComponent` that returns its input instead of throwing.
+ *
+ * A lone `%` is a valid URL character but not a valid escape, so `/%/measure`
+ * would take the raw `decodeURIComponent` down with a URIError — turning a
+ * "no such city" notice into a crashed page.
+ */
+export function safeDecode(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
 /** The path segment for a city. Percent-encoded; browsers show it decoded. */
 export function toCityPath(name: string): string {
 	return encodeURIComponent(String(name ?? ''));
@@ -74,13 +89,9 @@ const STROKED: Record<string, string> = {
 export function findCityByParam<T extends NamedFeature>(features: T[], param: string) {
 	if (!Array.isArray(features) || !param) return undefined;
 
-	let decoded = String(param);
-	try {
-		decoded = decodeURIComponent(decoded);
-	} catch {
-		// A malformed %-escape is a bad URL, not a crash: fall through and let
-		// the looser matches below have a go at the raw text.
-	}
+	// A malformed %-escape is a bad URL, not a crash: fall through on the raw
+	// text and let the looser matches below have a go at it.
+	const decoded = safeDecode(String(param));
 
 	const name = (f: NamedFeature) => f?.properties?.name;
 

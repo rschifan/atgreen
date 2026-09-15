@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { useRequest } from 'alova';
 	import { get_metadata } from '../../js/api';
-	import { findCityByParam, toCityPath } from '../../js/slug';
+	import { findCityByParam, safeDecode, toCityPath } from '../../js/slug';
 	import { TargetStoreImpl } from '../../js/types';
 	import { cities, current_city, metadata } from '../../stores/stores.js';
 
@@ -74,10 +74,10 @@
 
 {#if notFound}
 	<div class="notice">
-		<h1>No city called “{decodeURIComponent(param)}”</h1>
+		<h1>No city called “{safeDecode(param)}”</h1>
 		<p>
 			It may have been renamed, or the link may be mistyped.
-			<a href="/">Pick a city from the globe</a>.
+			<a href={resolve('/')}>Pick a city from the globe</a>.
 		</p>
 	</div>
 {:else if resolving}
