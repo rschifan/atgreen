@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { useWatcher } from 'alova';
-	import { Row } from 'carbon-components-svelte';
 	import ArrowsVertical from 'carbon-icons-svelte/lib/ArrowsVertical.svelte';
 	import UserMultiple from 'carbon-icons-svelte/lib/UserMultiple.svelte';
 	import { format } from 'd3';
@@ -123,49 +122,40 @@
 
 {#if data}
 	<div bind:clientWidth={width} class="index-container">
-		<Row style="padding-left:1rem;padding-right:1rem;">
-			<div style="display: flex;flex-direction: row;flex-wrap:wrap;gap:5px;">
-				{#each data.entries() as item}
-					<div
-						style="flex-grow: 1;min-width:70px"
-						class={$current_accessibility_index == item[0] ? 'selected internal' : 'internal'}
-					>
-						<!-- svelte-ignore a11y-no-static-element-interactions -->
-						<div
-							on:click={(e) => {
-								const pid = e.target.id;
-								document.getElementById(pid)?.parentElement.blur();
-								click(pid);
-							}}
-							on:keypress={(e) => {}}
-							style="display: flex;flex-direction:row;flex-wrap:wrap;"
-						>
-							<span id={item[0]} style="flex-grow: 1;text-align: center;" class="index-label"
-								>{item[0]}</span
-							>
-						</div>
+		<!--
+			Real buttons. These were bare <div on:click> with an empty on:keypress
+			and a svelte-ignore, and they are the ONLY way to change the index:
+			`current_accessibility_index.set` is called in exactly one other place,
+			the store's own default. So the app's primary control was unreachable
+			by keyboard entirely (WCAG 2.1.1). `aria-pressed` now carries the state
+			that was previously conveyed by background colour alone.
 
-						<div style="display:flex;flex-direction:row;flex-wrap:wrap;padding-bottom:1px">
-							<UserMultiple
-								size="1rem"
-								class="target-icon"
-								style="flex-grow: 1;text-align: right;"
-							/>
+			The old handler also read `e.target.id` to find out which tile was
+			clicked, so clicking a tile's padding rather than its label produced
+			`undefined` and did nothing.
+		-->
+		<div class="tiles">
+			{#each data.entries() as item (item[0])}
+				<button
+					type="button"
+					class="tile"
+					class:selected={$current_accessibility_index === item[0]}
+					aria-pressed={$current_accessibility_index === item[0]}
+					on:click={() => click(item[0])}
+				>
+					<span class="index-label">{item[0]}</span>
+					<span class="tile-row">
+						<UserMultiple size={16} />
+						<span class="target-label">{percentage_formatter(item[1])}</span>
+					</span>
+					<span class="tile-row">
+						<ArrowsVertical size={16} />
+						<span class="rank-label">{data.getPercentile(item[0])}th</span>
+					</span>
+				</button>
+			{/each}
+		</div>
 
-							<span class="target-label" style="flex-grow: 3;text-align: center;padding-bottom:1px">
-								{percentage_formatter(item[1])}
-							</span>
-						</div>
-						<div style="display: flex;flex-direction:row;flex-wrap:wrap;">
-							<ArrowsVertical size="0.85rem" style="flex-grow: 1;text-align: center;" />
-							<span style="flex-grow: 3;text-align: center;" class="rank-label"
-								>{data.getPercentile(item[0])}th</span
-							>
-						</div>
-					</div>
-				{/each}
-			</div>
-		</Row>
 		<!-- `{#if metadata}` was not enough: getTarget() returns undefined for an index
 		     that has not loaded yet, and .description on that throws. -->
 		{#if metadata?.getTarget($current_accessibility_index)}
@@ -186,6 +176,46 @@
 {/if}
 
 <style>
+	.tiles {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 4px;
+	}
+
+	.tile {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		width: 100%;
+		padding: 0.45rem 0.5rem;
+		border: 1px solid transparent;
+		background-color: rgba(90, 90, 90, 0.2);
+		color: inherit;
+		font: inherit;
+		font-weight: 300;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.tile:hover {
+		background-color: rgba(120, 120, 120, 0.35);
+	}
+
+	.tile:focus-visible {
+		outline: 2px solid var(--cds-focus, #ffffff);
+		outline-offset: -2px;
+	}
+
+	.tile.selected {
+		background-color: #0f62fe;
+	}
+
+	.tile-row {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
 	.internal {
 		padding-top: 5px;
 		padding-bottom: 5px;

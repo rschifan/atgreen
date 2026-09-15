@@ -11,7 +11,7 @@
 	} from '../../js/layers.js';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
 	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types.js';
-	import { adjust_zoom } from '../../js/utils.js';
+	import { adjust_zoom, refit_zoom } from '../../js/utils.js';
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
 
@@ -219,7 +219,10 @@
 		getMap: () => map
 	});
 
-	$: if (width && height && map) map.resize();
+	$: if (width && height && map) {
+		map.resize();
+		refit_zoom(map);
+	}
 
 	function setVisibilityLayer() {
 		visibilityToggle = !visibilityToggle;
@@ -296,8 +299,8 @@
 	}
 </script>
 
-<div bind:clientWidth={width} bind:clientHeight={height} style="flex: 1 1 auto;min-height: 0;">
-	<div id={container} bind:clientWidth={width} style="height: 100%;" />
+<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
+	<div id={container} />
 
 	{#if map}
 		<slot />
@@ -314,4 +317,19 @@
 {/if}
 
 <style>
+	/*
+		The map fills its stage absolutely, so no ancestor has to cooperate by
+		passing a height down. `height` is measured rather than declared, which
+		finally gives the `$: if (width && height && map) map.resize()` guard a
+		real input instead of the constant 500 it used to compare.
+	*/
+	.map-root {
+		position: absolute;
+		inset: 0;
+	}
+
+	.map-root > :global(div) {
+		width: 100%;
+		height: 100%;
+	}
 </style>

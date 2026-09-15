@@ -1,76 +1,41 @@
 <script lang="ts">
 	import AccessibilityLayer from './layers/AccessibilityLayer.svelte';
 	import BaseMap from './maps/BaseMap.svelte';
-
-	import { onMount } from 'svelte';
-	import {
-		current_accessibility_index,
-		current_accessibility_index_data,
-		current_city
-	} from '../stores/stores';
 	import NewIndexesSummary from './controls/NewIndexesSummary.svelte';
 	import IndexExplanationLayer from './layers/IndexExplanationLayer.svelte';
 	import Legend from './plotting/Legend.svelte';
-	import { ToastNotification } from 'carbon-components-svelte';
-
-	let map;
+	import ToolPane from './ToolPane.svelte';
 
 	export let metadata;
 
+	let map;
 	let styleLoaded = false;
 	let mapLoaded = false;
 
-	onMount(() => {
-		current_accessibility_index.set('WHO');
-		const anchor = document.getElementById('measure');
-		window.scrollTo({
-			top: anchor ? anchor.offsetTop - 50 : 50,
-			behavior: 'smooth'
-		});
-	});
+	/*
+		The `onMount` that used to live here did two things, both wrong:
 
-	let innerHeight: number;
-	let innerWidth: number;
-
-	console.log('what!', $current_accessibility_index_data);
+		- `current_accessibility_index.set('WHO')`, which clobbered the user's
+		  choice. Harmless when the panel mounted once; since panels became
+		  route-scoped it ran on every visit, so leaving Measure and coming back
+		  silently reset the index. The default now lives in the store, set once
+		  at module load.
+		- `window.scrollTo` toward `getElementById('measure')` — an id that exists
+		  nowhere in the source, so it scrolled to 50px for no reason. In a
+		  viewport-height layout there is nothing to scroll at all.
+	*/
 </script>
 
-<svelte:window bind:innerWidth bind:innerHeight />
+<ToolPane>
+	<svelte:fragment slot="rail">
+		<NewIndexesSummary {metadata} />
+		<Legend {metadata} />
+	</svelte:fragment>
 
-<!-- {#if $current_accessibility_index_data} -->
-<div><NewIndexesSummary {metadata} /></div>
+	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded />
 
-<div style="flex-grow: 1;display: flex;flex-direction: column;">
-	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded>
-		<Legend {metadata} containerWidth={innerWidth} />
-	</BaseMap>
-</div>
-
-{#if map && mapLoaded && styleLoaded}
-	<AccessibilityLayer {map} {metadata} />
-	<IndexExplanationLayer {map} {metadata} />
-{/if}
-
-<!-- {:else}
-	<ToastNotification
-		fullWidth
-		lowContrast
-		kind="error"
-		title="Data load error"
-		subtitle="Impossibile to load the accessibility data profile for {$current_city.text}."
-		caption={new Date().toLocaleString()}
-		on:close={() => {
-			empty_resultset_error = false;
-		}}
-	/>
-{/if} -->
-
-<style>
-	p {
-		margin-top: 10px;
-	}
-
-	div {
-		padding: 10px 0px;
-	}
-</style>
+	{#if map && mapLoaded && styleLoaded}
+		<AccessibilityLayer {map} {metadata} />
+		<IndexExplanationLayer {map} {metadata} />
+	{/if}
+</ToolPane>

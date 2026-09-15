@@ -199,6 +199,116 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.locator('.mapboxgl-map')).toHaveCount(0);
 	});
 
+	// Nothing in this suite would have failed while half the viewport was empty
+	// black: every assertion was about teardown or request counts, none about
+	// geometry. These pin the layout itself.
+	test.describe('pane layout', () => {
+		test('the map fills its stage and no hidden panel holds space', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/measure');
+			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(1, { timeout: 20000 });
+
+			const box = await page.evaluate(() => {
+				const rail = document.querySelector('.rail')!.getBoundingClientRect();
+				const stage = document.querySelector('.stage')!.getBoundingClientRect();
+				const canvas = document.querySelector('canvas.mapboxgl-canvas')!.getBoundingClientRect();
+				const tabs = document.querySelector('.bx--tabs')!.getBoundingClientRect();
+				return {
+					tabsBottom: tabs.bottom,
+					railTop: rail.top,
+					railWidth: rail.width,
+					stageTop: stage.top,
+					stageBottom: stage.bottom,
+					stageW: stage.width,
+					stageH: stage.height,
+					canvasW: canvas.width,
+					canvasH: canvas.height,
+					vh: window.innerHeight,
+					docOverflow: document.documentElement.scrollHeight - document.documentElement.clientHeight
+				};
+			});
+
+			// The canvas fills the stage exactly — the whole point of the shell.
+			expect(Math.abs(box.canvasW - box.stageW), 'canvas width vs stage').toBeLessThan(2);
+			expect(Math.abs(box.canvasH - box.stageH), 'canvas height vs stage').toBeLessThan(2);
+
+			// The stage reaches the bottom of the viewport: nothing below is stealing
+			// space, and no ancestor transform has broken the height chain.
+			expect(Math.abs(box.stageBottom - box.vh), 'stage bottom vs viewport').toBeLessThan(2);
+
+			// Rail and stage start at the same line. The dead space used to appear
+			// *above* the controls, so this is the direct inverse of that bug.
+			expect(Math.abs(box.railTop - box.stageTop), 'rail top vs stage top').toBeLessThan(2);
+
+			// A map pane does not scroll the document.
+			expect(box.docOverflow, 'document overflow').toBeLessThan(2);
+
+			// The assertion that actually catches the original bug. Everything above
+			// only proves the pane fills what it was GIVEN; the defect was a sibling
+			// above it taking space away, which leaves all of those true. Verified by
+			// injecting a `flex-grow:1` div above the pane: it stole 124px and every
+			// other assertion here still passed.
+			expect(Math.abs(box.stageTop - box.tabsBottom), 'gap between tabs and stage').toBeLessThan(2);
+		});
+
+		test('Draw gives both maps an equal half', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/draw');
+			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(2, { timeout: 20000 });
+
+			// The After column was `visibility:hidden` until a cell was picked, which
+			// still reserves its box — so Before was permanently half-width with
+			// nothing beside it.
+			const widths = await page.$$eval('canvas.mapboxgl-canvas', (els) =>
+				els.map((e) => e.getBoundingClientRect().width)
+			);
+			expect(widths).toHaveLength(2);
+			expect(Math.abs(widths[0] - widths[1]), `widths: ${widths}`).toBeLessThan(2);
+			expect(widths[0], 'each map should be substantial').toBeGreaterThan(200);
+		});
+
+		test('the rail becomes a drawer on a narrow viewport', async ({ page }) => {
+			await stubBackend(page);
+			await page.setViewportSize({ width: 375, height: 812 });
+			await page.goto('/Turin/measure');
+			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(1, { timeout: 20000 });
+
+			// Stacked, not side by side: the rail spans the width and the stage sits
+			// below it. This is the branch the old `innerWidth > 500` checks covered
+			// in JS, so it is the one most likely to regress silently.
+			const box = await page.evaluate(() => {
+				const rail = document.querySelector('.rail')!.getBoundingClientRect();
+				const stage = document.querySelector('.stage')!.getBoundingClientRect();
+				return {
+					railW: rail.width,
+					stageW: stage.width,
+					railBottom: rail.bottom,
+					stageTop: stage.top,
+					vw: window.innerWidth
+				};
+			});
+			expect(Math.abs(box.railW - box.vw), 'rail spans the viewport').toBeLessThan(2);
+			expect(Math.abs(box.stageW - box.vw), 'stage spans the viewport').toBeLessThan(2);
+			expect(box.stageTop).toBeGreaterThanOrEqual(box.railBottom - 2);
+		});
+
+		test('the index tiles are reachable and operable by keyboard', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/measure');
+			const tiles = page.locator('button.tile');
+			await expect(tiles).toHaveCount(8, { timeout: 20000 });
+
+			// They were bare <div on:click> with an empty on:keypress, and they are
+			// the only way to change the index (WCAG 2.1.1).
+			await expect(tiles.first()).toHaveAttribute('aria-pressed', 'true');
+			await tiles.nth(3).focus();
+			await expect(tiles.nth(3)).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(tiles.nth(3)).toHaveAttribute('aria-pressed', 'true');
+			await expect(tiles.first()).toHaveAttribute('aria-pressed', 'false');
+		});
+	});
+
 	test('maps are torn down when their tab closes', async ({ page }) => {
 		// Counting .mapboxgl-map nodes does NOT test this: Svelte removes the DOM node
 		// whether or not map.remove() ran, so that assertion passes even with the

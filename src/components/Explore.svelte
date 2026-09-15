@@ -150,7 +150,7 @@
 	</div>
 {/if}
 
-<div style="flex-grow: 1;display: flex;flex-direction: column;">
+<div style="position: relative; flex-grow: 1;">
 	<ExploreMap
 		bind:ref
 		bind:data

@@ -5,12 +5,16 @@
 	import { AV_COLOR_GREEN, AV_COLOR_RED, AV_COLOR_WHITE, ToRGBA } from '../../js/colors';
 	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types';
 
-	let parent_width: number;
-
 	export let index_type: number;
 	export let data: object;
 	export let threshold: number;
-	export let width: number;
+	/*
+		Measured, not passed. Callers used to compute this from a
+		`<svelte:window bind:innerWidth>` breakpoint — `innerWidth > 500 ? 400 :
+		innerWidth / 2` — which was only ever right for a full-width map and is
+		meaningless inside a grid cell or a rail.
+	*/
+	let width = 0;
 
 	let margins = {
 		top: 25,
@@ -91,10 +95,6 @@
 			colorScale = scaleDiverging().domain([minv, threshold, maxv]).range(get_color_range());
 			xScale = scaleLinear().domain([0, n_steps]).range([minv, maxv]);
 			xTicksValueScale = scaleLinear().domain([0, n_xticks]).range([minv, maxv]);
-
-			window.onresize = () => {
-				offset = (legend_node?.parentElement?.clientWidth - width) / 2;
-			};
 		}
 	});
 
@@ -110,13 +110,10 @@
 	}
 	let legend_node;
 	let parent_node;
-	let offset;
-
-	$: offset = (legend_node?.parentElement?.clientWidth - width) / 2;
 </script>
 
 {#if data && data.features.length > 0 && minv >= 0 && maxv >= 0}
-	<div bind:this={legend_node} class="legend-container" style="position:absolute; left:{offset}px;">
+	<div bind:this={legend_node} bind:clientWidth={width} class="legend-container">
 		<figure>
 			<svg height={margins.top + margins.bottom + legend.height + ticks.margin} {width}>
 				{#each Array(n_steps) as _, index (index)}
@@ -181,9 +178,18 @@
 {/if}
 
 <style>
+	/*
+		Centred by the box model, not by a JS `left` offset recomputed inside
+		afterUpdate — which also assigned `window.onresize` on every render,
+		clobbering any other handler on the page and never removing itself.
+	*/
 	div.legend-container {
 		position: absolute;
+		left: 1rem;
+		right: 1rem;
 		bottom: 1.5rem;
+		margin: 0 auto;
+		max-width: 25rem;
 		background-color: rgba(10, 10, 10, 0.75);
 		border-radius: 5px;
 	}
