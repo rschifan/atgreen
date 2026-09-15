@@ -66,8 +66,6 @@
 	}
 
 	onMount(() => {
-		console.log('SummaryLayer - onMount');
-
 		if (!map.getSource(SUMMARY_SOURCE))
 			map.addSource(SUMMARY_SOURCE, {
 				type: 'geojson',

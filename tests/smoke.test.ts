@@ -47,7 +47,17 @@ async function stubBackend(page: Page) {
 	await page.route('**/api.mapbox.com/**', async (route) => {
 		await route.fulfill({
 			contentType: 'application/json',
-			body: JSON.stringify({ version: 8, sources: {}, layers: [], glyphs: '', sprite: '' })
+			body: JSON.stringify({
+				version: 8,
+				sources: {},
+				layers: [],
+				// A non-empty glyphs URL: mapbox-gl rejects any `text-field` layer when
+				// the style declares none, and several layers here use one. Those
+				// validation errors were always emitted — the production build's
+				// console-drop was simply swallowing them before Vite 8 removed it.
+				glyphs: 'https://example.invalid/{fontstack}/{range}.pbf',
+				sprite: ''
+			})
 		});
 	});
 	// Fulfilled rather than aborted: an aborted request surfaces as a console error,

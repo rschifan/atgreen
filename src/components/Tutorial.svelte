@@ -10,7 +10,7 @@
 	let step = 0;
 	let nsteps = 5;
 	let preventChangeOnClick = true;
-	let vertical = false;
+	let vertical;
 
 	function nextStep() {
 		step += 1;

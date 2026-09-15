@@ -48,13 +48,11 @@
 	let unsubscribe_city_profile: Unsubscriber;
 	let unsubscribe_change_city_event: Unsubscriber;
 	let unsubscribe_change_accessibility_index_event: Unsubscriber;
-	let unsubscribe_accessibility_indexes_event: Unsubscriber;
 
 	onDestroy(() => {
 		if (unsubscribe_change_city_event) unsubscribe_change_city_event();
 		if (unsubscribe_change_accessibility_index_event)
 			unsubscribe_change_accessibility_index_event();
-		if (unsubscribe_accessibility_indexes_event) unsubscribe_accessibility_indexes_event();
 		if (unsubscribe_city_profile) unsubscribe_city_profile();
 	});
 

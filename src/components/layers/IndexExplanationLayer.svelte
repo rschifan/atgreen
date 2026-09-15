@@ -34,7 +34,6 @@
 	let unsubscribe_current_cell_event: Unsubscriber;
 
 	onMount(() => {
-		console.log('ExplanationLayer - onmount');
 		init();
 
 		unsubscribe_current_cell_event = current_cell.subscribe((data) => {
@@ -46,8 +45,6 @@
 	});
 
 	onDestroy(() => {
-		console.log('ExplanationLayer - destroy');
-
 		if (unsubscribe_current_cell_event) unsubscribe_current_cell_event();
 
 		// The parent map may already have been removed, after which these throw.
@@ -115,8 +112,6 @@
 	async function compute_explanation() {
 		if (!$current_city) return;
 
-		console.log($current_city);
-
 		let params: { pgas_size: number; distance: number } = get_pgas_parameters();
 		let response;
 
@@ -147,7 +142,6 @@
 					distance: distance.toString()
 				});
 
-				console.log('https://atgreen.hpc4ai.unito.it/rpc/allareaswithindistance_esa?' + params_url);
 				response = fetch(
 					'https://atgreen.hpc4ai.unito.it/rpc/allareaswithindistance_esa?' + params_url
 				);
@@ -163,7 +157,6 @@
 					distance: distance.toString()
 				});
 
-				console.log('https://atgreen.hpc4ai.unito.it/rpc/exposurewithindistance_osm?' + params_url);
 				response = fetch(
 					'https://atgreen.hpc4ai.unito.it/rpc/exposurewithindistance_osm?' + params_url
 				);

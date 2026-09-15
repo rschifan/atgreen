@@ -288,13 +288,7 @@
 					}
 				}
 			}
-		} else
-			console.log(
-				'Make sure to have selected a city and the two indexes!',
-				$current_city,
-				indexA,
-				indexB
-			);
+		}
 	}
 
 	function draw(dataA, dataB) {

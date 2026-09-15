@@ -112,7 +112,6 @@
 	}
 
 	onMount(() => {
-		console.log('BaseMap - mount');
 		init();
 	});
 
