@@ -145,8 +145,6 @@
 	$: classification = index?.classification;
 
 	onMount(() => {
-		console.log('AccessibilityLayer - onMount');
-
 		unsubscribe_current_cell_event = current_cell.subscribe((value) => {
 			if (value && value.x != -1 && value.y != -1)
 				map.setPaintProperty(ACCESSIBILITY_INDEX_LAYER, 'fill-opacity', [
@@ -181,13 +179,12 @@
 				if (value && value.features && value.features.length > 0) {
 					const accessibility_source = map.getSource(ACCESSIBILITY_INDEX_SOURCE);
 					if (accessibility_source) {
-						console.log('AccessibilityLayer data loaded', value);
 						accessibility_source.setData(value);
 						adjust_zoom(value, map);
 						update(value);
 
 						current_accessibility_index_data.set(value);
-					} else console.log('accessibility source not valid', accessibility_source);
+					}
 				}
 				loading.set(false);
 			}
@@ -281,8 +278,6 @@
 	});
 
 	onDestroy(() => {
-		console.log('AccessibilityLayer - destroy');
-
 		if (unsubscribe_accessibility_layer_request_event)
 			unsubscribe_accessibility_layer_request_event();
 		if (unsubscribe_current_accessibility_index_event)
@@ -330,7 +325,7 @@
 
 		const value = feature.properties.v;
 
-		let value_string = '';
+		let value_string: string;
 
 		if (type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)

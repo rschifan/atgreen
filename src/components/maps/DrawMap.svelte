@@ -17,7 +17,6 @@
 	let width = 0;
 
 	onMount(() => {
-		console.log('DrawMap - mount');
 		init();
 	});
 

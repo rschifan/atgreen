@@ -93,12 +93,13 @@
 
 	onMount(() => {
 		unsubscribe_greenareas_request_error = greenareas_request.error.subscribe((error) => {
-			if (error) console.log('greenareas_request.error.subscribe', error);
+			// A failed green-areas request leaves an empty map with no explanation.
+			// Reporting it is the floor; surfacing it in the UI is still owed.
+			if (error) console.error('Explore: green areas request failed', error);
 		});
 
 		unsubscribe_greenareas_request = greenareas_request.data.subscribe((value) => {
 			if (value && value.features && value.features.length > 0) {
-				console.log('GREEN AREAS LOADED');
 				data = value;
 			}
 		});

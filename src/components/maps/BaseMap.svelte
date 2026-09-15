@@ -18,7 +18,6 @@
 	let width = 0;
 
 	onMount(() => {
-		console.log('BaseMap - mount');
 		init();
 	});
 

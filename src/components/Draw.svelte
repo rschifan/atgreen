@@ -67,8 +67,7 @@
 	// 6	{grass}
 	let current_time_budget = 5;
 	let current_greenarea_size = 0.5;
-	let time_budget_slider_disabled: boolean =
-		current_index_type == AccessibilityIndexType.MINIMUM_DISTANCE;
+	let time_budget_slider_disabled: boolean;
 
 	let current_target: number;
 
@@ -85,7 +84,7 @@
 	let newMapLoaded = false;
 	let empty_resultset_error = false;
 
-	let green_types_combobox_disabled = false;
+	let green_types_combobox_disabled: boolean;
 	let cell_id: number | undefined = undefined;
 	let unsubscribe_current_city: Unsubscriber;
 
@@ -119,8 +118,6 @@
 		const A = geojson1.features.sort((a, b) => b.properties.id - a.properties.id);
 		const B = geojson2.features.sort((a, b) => b.properties.id - a.properties.id);
 
-		console.log('diff length', A.length, B.length);
-
 		let i = 0;
 		let j = 0;
 		while (i < A.length && j < B.length) {
@@ -145,7 +142,6 @@
 				i += 1;
 				j += 1;
 			} else {
-				console.log(idA, idB, vA, vB, i, j);
 				if (idA > idB) i += 1;
 				else j += 1;
 			}
@@ -324,7 +320,6 @@
 
 			add_diff_layer(diff, new_map, true);
 			add_diff_layer(diff, reference_map);
-			console.log('diff', diff);
 			adjust_zoom(diff, new_map);
 			adjust_zoom(diff, reference_map);
 		}

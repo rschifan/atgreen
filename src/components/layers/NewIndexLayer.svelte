@@ -79,7 +79,6 @@
 	function update_datasource() {
 		let source = map.getSource(NEW_INDEX_SOURCE);
 		if (source) {
-			console.log('updated_datasource', data);
 			source.setData(data);
 		}
 	}
@@ -90,8 +89,6 @@
 	}
 
 	onMount(() => {
-		console.log('NewIndexLayer - onMount');
-
 		if (!map.getSource(NEW_INDEX_SOURCE))
 			map.addSource(NEW_INDEX_SOURCE, {
 				type: 'geojson',
@@ -106,7 +103,6 @@
 				source: NEW_INDEX_SOURCE,
 				paint: { 'fill-outline-color': 'rgba(0, 0, 0, 0)' }
 			});
-			console.log('layer added');
 		}
 
 		map.on('mouseenter', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
@@ -176,8 +172,6 @@
 	});
 
 	onDestroy(() => {
-		console.log('NewIndexLayer - destroy');
-
 		// The parent map component may already have called map.remove(), after which
 		// every method below throws and takes the rest of the teardown with it. The
 		// map.off(type, layerId) calls that used to be here removed nothing anyway:
@@ -218,7 +212,7 @@
 		let target_predicate;
 		const value = feature.properties.v;
 
-		let value_string = '';
+		let value_string: string;
 
 		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)

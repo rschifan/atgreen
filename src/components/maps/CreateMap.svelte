@@ -102,7 +102,6 @@
 		}
 	}
 	onMount(() => {
-		console.log('BaseMap - mount');
 		init();
 	});
 
@@ -251,7 +250,7 @@
 		let target_predicate;
 		const value = feature.properties.v;
 
-		let value_string = '';
+		let value_string: string;
 
 		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) {
 			if (value == 0)

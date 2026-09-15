@@ -2,7 +2,6 @@
 	import { refit_zoom } from '../../js/utils';
 	import 'mapbox-gl/dist/mapbox-gl.css';
 	import { createEventDispatcher, onDestroy, onMount, setContext } from 'svelte';
-	import type { Unsubscriber } from 'svelte/store';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
 	import { current_city, hovered_feature } from '../../stores/stores.js';
 
@@ -30,8 +29,6 @@
 
 	let width = 0;
 
-	let unsubscribe_hovered_feature: Unsubscriber;
-
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
 
@@ -44,15 +41,12 @@
 	}).setLngLat([0, 0]);
 
 	onMount(() => {
-		console.log('ReferenceMap - mount');
-
 		init();
 	});
 
 	onDestroy(() => {
 		// See BaseMap: dropping the DOM node does not release the WebGL context.
 		map?.remove();
-		if (unsubscribe_hovered_feature) unsubscribe_hovered_feature();
 	});
 
 	function init() {

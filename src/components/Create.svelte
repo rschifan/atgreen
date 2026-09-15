@@ -41,9 +41,8 @@
 	// 6	{grass}
 	let current_time_budget = 5;
 	let current_greenarea_size = 0.5;
-	let time_budget_slider_disabled: boolean =
-		current_index_type == AccessibilityIndexType.MINIMUM_DISTANCE;
-	let create_button_disabled: boolean = $current_city && $current_city.text;
+	let time_budget_slider_disabled: boolean;
+	let create_button_disabled: boolean;
 
 	let current_target: number;
 	let current_target_min: number;
@@ -54,10 +53,10 @@
 	let map;
 	let styleLoaded = false;
 	let mapLoaded = false;
-	let unit = 'min';
+	let unit: string;
 	let empty_resultset_error = false;
 
-	let green_types_combobox_disabled = false;
+	let green_types_combobox_disabled: boolean;
 
 	const empty_geojson = { type: 'FeatureCollection', features: [] };
 

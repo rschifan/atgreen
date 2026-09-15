@@ -41,7 +41,10 @@ export function adjust_zoom(data: any, map: mapbox.Map, animate = false) {
 			fit(map, bb, animate);
 		}
 	} catch (error) {
-		console.log('adjust_zoom:', error);
+		// Reported, not swallowed: a map that silently fails to frame its data is
+		// the failure mode this codebase keeps producing. `console.error` survives
+		// the build deliberately, and the e2e suite asserts on it.
+		console.error('adjust_zoom:', error);
 	}
 }
 
@@ -59,7 +62,7 @@ export function refit_zoom(map: mapbox.Map) {
 		try {
 			fit(map, bb, false);
 		} catch (error) {
-			console.log('refit_zoom:', error);
+			console.error('refit_zoom:', error);
 		}
 	}
 }
