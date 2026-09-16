@@ -4,7 +4,8 @@ import {
 	create_geojson,
 	escape_html,
 	get_green_types_code,
-	html
+	html,
+	ordinal
 } from './utils';
 
 describe('get_green_types_code', () => {
@@ -111,5 +112,33 @@ describe('escape_html / html', () => {
 	it('escapes every interpolation, not just the first', () => {
 		const out = html`<a>${'<b>'}</a><c>${'<d>'}</c>`;
 		expect(out).toBe('<a>&lt;b&gt;</a><c>&lt;d&gt;</c>');
+	});
+});
+
+describe('ordinal', () => {
+	it('uses st, nd and rd where English does', () => {
+		// The rail printed `{percentile}th` by concatenation, so Turin's 43rd
+		// percentile shipped to production reading "43th".
+		expect(ordinal(1)).toBe('1st');
+		expect(ordinal(2)).toBe('2nd');
+		expect(ordinal(3)).toBe('3rd');
+		expect(ordinal(4)).toBe('4th');
+		expect(ordinal(43)).toBe('43rd');
+		expect(ordinal(21)).toBe('21st');
+		expect(ordinal(22)).toBe('22nd');
+	});
+
+	it('keeps th for the teens, which end in 1, 2 and 3 but are not st, nd, rd', () => {
+		expect(ordinal(11)).toBe('11th');
+		expect(ordinal(12)).toBe('12th');
+		expect(ordinal(13)).toBe('13th');
+		expect(ordinal(111)).toBe('111th');
+		expect(ordinal(112)).toBe('112th');
+	});
+
+	it('returns nothing for a value it cannot rank', () => {
+		expect(ordinal(undefined)).toBe('');
+		expect(ordinal(null)).toBe('');
+		expect(ordinal(NaN)).toBe('');
 	});
 });

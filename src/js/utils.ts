@@ -149,3 +149,28 @@ export function html(strings: TemplateStringsArray, ...values: unknown[]): strin
 		''
 	);
 }
+
+/**
+ * An English ordinal: 1st, 2nd, 3rd, 4th, 11th, 21st, 43rd.
+ *
+ * The rail printed `{percentile}th` by concatenation, so Turin's 43rd percentile
+ * rendered as "43th" on the live site, and any city ranked 1st, 2nd, 3rd, 21st
+ * or 22nd read as "1th", "2th", "3th", "21th", "22th".
+ */
+export function ordinal(n: number | undefined | null): string {
+	if (n === undefined || n === null || !Number.isFinite(n)) return '';
+	const v = Math.trunc(Math.abs(n));
+	// 11, 12 and 13 are "th" despite ending in 1, 2 and 3.
+	const teens = v % 100;
+	if (teens >= 11 && teens <= 13) return `${n}th`;
+	switch (v % 10) {
+		case 1:
+			return `${n}st`;
+		case 2:
+			return `${n}nd`;
+		case 3:
+			return `${n}rd`;
+		default:
+			return `${n}th`;
+	}
+}

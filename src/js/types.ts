@@ -250,3 +250,59 @@ export class CityStoreImpl {
 		return [...this.indexes.entries()];
 	}
 }
+
+/**
+ * What each family of index actually asks.
+ *
+ * The eight indexes are not peers: five measure the distance to a greenspace of
+ * some minimum size, two measure green area per person, one measures total
+ * exposure. That split is not a presentational invention — it is
+ * `AccessibilityIndexType`, the same value that already picks the colour ramp's
+ * direction, the classification scheme and the unit. Grouping the rail by it is
+ * how the panel stops implying that WHO's 75% and IPP's 100% answer the same
+ * question.
+ */
+export const INDEX_GROUP_LABEL: Record<number, string> = {
+	[AccessibilityIndexType.MINIMUM_DISTANCE]: 'Distance to greenspace',
+	[AccessibilityIndexType.PER_PERSON]: 'Green per person',
+	[AccessibilityIndexType.EXPOSURE]: 'Exposure'
+};
+
+/** Display order of the groups: most indexes first, then the two smaller families. */
+export const INDEX_GROUP_ORDER: AccessibilityIndexType[] = [
+	AccessibilityIndexType.MINIMUM_DISTANCE,
+	AccessibilityIndexType.PER_PERSON,
+	AccessibilityIndexType.EXPOSURE
+];
+
+/**
+ * A one-line statement of what an index requires, built from the RPC's own
+ * fields rather than from prose.
+ *
+ *   WHO -> "≥0.5 ha within 5 min"
+ *   IPP -> "9 m² per person within 30 min"
+ *   ESA -> "0.5 ha within 5 min"
+ *
+ * The rail used to show eight bare acronyms and explain only the selected one,
+ * so seven of the eight were unexplained at any moment. `target.description` is
+ * a full sentence — too long for a row — and these three fields say the same
+ * thing in the space available.
+ */
+export function describe_index_target(target: {
+	threshold: number;
+	index: { type: AccessibilityIndexType; size: number; distance: number };
+}): string {
+	const { threshold, index } = target;
+	if (!index) return '';
+
+	switch (index.type) {
+		case AccessibilityIndexType.MINIMUM_DISTANCE:
+			return `≥${index.size} ha within ${threshold} min`;
+		case AccessibilityIndexType.PER_PERSON:
+			return `${threshold} m² per person within ${index.distance} min`;
+		case AccessibilityIndexType.EXPOSURE:
+			return `${threshold} ha within ${index.distance} min`;
+		default:
+			return '';
+	}
+}
