@@ -68,31 +68,43 @@ export function refit_zoom(map: mapbox.Map) {
 }
 
 export function get_green_types_code(green_types: []) {
+	if (!green_types) return undefined;
+
 	// An empty selection used to join to '', match no case, and fall through to the
 	// default 0 — which is the code for *all three* types. Deselecting everything
 	// therefore asked for everything. Undefined lets the caller refuse the request
 	// rather than silently invert it.
-	if (green_types && green_types.length === 0) return undefined;
-	if (green_types) {
-		const types = green_types.join(',');
-		switch (types) {
-			case 'forests,grass,parks':
-				return 0;
-			case 'forests,parks':
-				return 1;
-			case 'grass,parks':
-				return 2;
-			case 'parks':
-				return 3;
-			case 'forests,grass':
-				return 4;
-			case 'forests':
-				return 5;
-			case 'grass':
-				return 6;
-		}
-		return 0;
+	if (green_types.length === 0) return undefined;
+
+	// SORTED. The cases below are spelled alphabetically, but the callers build
+	// this list with `bind:group`, which yields the checkbox order, not a sorted
+	// one. Draw starts at ['parks','forests','grass']; unchecking "grass" leaves
+	// ['parks','forests'], which joins to 'parks,forests', matches no case, and
+	// fell through to 0 — all three types. Every partial selection in Draw and
+	// Create silently asked the RPC for the opposite of what was ticked.
+	const types = [...green_types].sort().join(',');
+
+	switch (types) {
+		case 'forests,grass,parks':
+			return 0;
+		case 'forests,parks':
+			return 1;
+		case 'grass,parks':
+			return 2;
+		case 'parks':
+			return 3;
+		case 'forests,grass':
+			return 4;
+		case 'forests':
+			return 5;
+		case 'grass':
+			return 6;
 	}
+
+	// All seven non-empty subsets of {parks, forests, grass} are enumerated above,
+	// so reaching here means the input was not one of them. Refuse rather than
+	// guess: the callers already treat undefined as "do not run this query".
+	return undefined;
 }
 
 export function create_empty_geojson() {
