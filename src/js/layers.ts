@@ -40,6 +40,60 @@ export function spread(a: number, b: number, c: number): [number, number, number
 	return [a, mid, high];
 }
 
+/**
+ * The outer stops of a diverging colour ramp, with outliers clamped off.
+ *
+ * The ramp used to span the raw min and max of the data, so a single extreme
+ * cell owned the palette. Measured on Turin:
+ *
+ *   ESA  target 0.5 ha, range 0–35.9  -> the below-target half was 1.4% of the
+ *        ramp, and the MEDIAN cell (5.49) sat only 14% along the other half, so
+ *        most of the city rendered pale yellow and the colour said nothing.
+ *   WHO  target 5 min, range 0–35.8   -> the mirror image: 67.5% of cells
+ *        squeezed into the first 14% of the ramp.
+ *
+ * Clamping each end to a percentile fixes both. The one rule that matters: an
+ * end is only clamped if doing so would not swallow the target, because the
+ * target is the break the two colours mean. IPP's target (9 m²) is below its own
+ * 2nd percentile, so its low end stays at the raw minimum and its below-target
+ * cells keep their colour.
+ *
+ * @param values raw, unscaled cell values
+ * @param threshold the index's target, in the same units
+ */
+export function robust_bounds(
+	values: number[],
+	threshold: number,
+	lower = 0.02,
+	upper = 0.98
+): { min: number; max: number } {
+	const finite = values.filter((v) => Number.isFinite(v));
+	if (finite.length === 0) return { min: 0, max: 1 };
+
+	const sorted = [...finite].sort((a, b) => a - b);
+	const at = (p: number) =>
+		sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))];
+
+	const raw_min = sorted[0];
+	const raw_max = sorted[sorted.length - 1];
+	const lo_p = at(lower);
+	const hi_p = at(upper);
+	const target = Number.isFinite(threshold) ? threshold : raw_min;
+
+	return {
+		// Clamping an end away from the target would delete one side of the ramp.
+		min: target < lo_p ? raw_min : lo_p,
+		max: target > hi_p ? raw_max : hi_p
+	};
+}
+
+/** True when `robust_bounds` clipped the top, so the legend can say "19+". */
+export function is_clamped_high(values: number[], threshold: number): boolean {
+	const finite = values.filter((v) => Number.isFinite(v));
+	if (finite.length === 0) return false;
+	return robust_bounds(finite, threshold).max < Math.max(...finite);
+}
+
 export function get_colormap_rule(
 	data: number[],
 	type: AccessibilityIndexType,
@@ -50,7 +104,9 @@ export function get_colormap_rule(
 	// 100,000 arguments is fine, 125,000 throws "Maximum call stack size exceeded".
 	// Grids are in the thousands today (Milan, the largest checked, is 13,220), so
 	// this was a cliff roughly one large city away, presenting as a blank map.
-	const { min, max } = extent(data);
+	// Outliers clamped off: see robust_bounds. The legends call the same helper,
+	// so the ramp on the map and the ramp in the legend cannot disagree.
+	const { min, max } = robust_bounds(data, threshold);
 
 	const low = to_scale(min, classification);
 	const high = to_scale(max, classification);

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { build_greenareas_filter, extent, get_colormap_rule, spread, to_scale } from './layers';
+import {
+	build_greenareas_filter,
+	extent,
+	get_colormap_rule,
+	is_clamped_high,
+	robust_bounds,
+	spread,
+	to_scale
+} from './layers';
 import { AccessibilityIndexType, ClassificationScheme } from './types';
 
 describe('extent', () => {
@@ -162,5 +170,52 @@ describe('build_greenareas_filter', () => {
 			'all',
 			['in', ['get', 'osm_value'], ['literal', []]]
 		]);
+	});
+});
+
+describe('robust_bounds', () => {
+	// A bulk of values with one extreme outlier, the shape every index has.
+	const bulk = Array.from({ length: 98 }, (_, i) => i + 1); // 1..98
+	const withOutlier = [...bulk, 1000];
+
+	it('clamps an outlier off the top instead of letting it own the palette', () => {
+		expect(robust_bounds(withOutlier, 5).max).toBeLessThan(1000);
+		// Raw max was 1000; the ramp now ends near the bulk of the data.
+		expect(robust_bounds(withOutlier, 5).max).toBeLessThanOrEqual(100);
+	});
+
+	it('keeps the target strictly inside the ramp', () => {
+		// IPP's real shape: the target sits BELOW the 2nd percentile, so clamping
+		// the low end would delete the whole below-target side of the scale.
+		const values = [0, 0, 100, 500, 800, 900, 1200, 5000, 40551];
+		const { min, max } = robust_bounds(values, 9);
+		expect(min).toBeLessThanOrEqual(9);
+		expect(max).toBeGreaterThanOrEqual(9);
+	});
+
+	it("clamps the long tail that made ESA's ramp useless", () => {
+		// ESA's real shape on Turin: 3867 cells, target 0.5 ha, bulk between 0 and
+		// ~20, a thin tail out to 35.9. A percentile needs a real sample to mean
+		// anything — with a dozen values p98 IS the maximum, and nothing is clipped.
+		const bulk = Array.from({ length: 980 }, (_, i) => (i / 979) * 20);
+		const tail = Array.from({ length: 20 }, (_, i) => 21 + i * 0.75); // out to 35.9
+		const { min, max } = robust_bounds([...bulk, ...tail], 0.5);
+
+		expect(min).toBeLessThanOrEqual(0.5); // the below-target side survives
+		expect(max).toBeLessThan(35.9); // the tail no longer owns the palette
+		expect(max).toBeGreaterThan(15); // ...but the bulk is still covered
+	});
+
+	it('survives empty, non-finite and single-value input', () => {
+		expect(robust_bounds([], 5)).toEqual({ min: 0, max: 1 });
+		expect(robust_bounds([NaN, Infinity], 5)).toEqual({ min: 0, max: 1 });
+		const one = robust_bounds([7, 7, 7], 7);
+		expect(one.min).toBe(7);
+		expect(one.max).toBe(7);
+	});
+
+	it('reports when the top was clipped, so the legend can say so', () => {
+		expect(is_clamped_high(withOutlier, 5)).toBe(true);
+		expect(is_clamped_high(bulk.slice(0, 5), 3)).toBe(false);
 	});
 });
