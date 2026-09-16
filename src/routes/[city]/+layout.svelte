@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Tab, Tabs } from 'carbon-components-svelte';
 	import { page } from '$app/stores';
 	import { resolve } from '$app/paths';
 	import { useRequest } from 'alova';
@@ -51,26 +50,27 @@
 
 	$: cityPath = feature?.properties?.name ? toCityPath(feature.properties.name) : param;
 	$: section = SECTIONS.find((s) => $page.url.pathname.endsWith('/' + s)) ?? 'measure';
-	$: selected = SECTIONS.indexOf(section) + 1; // 0 is Search
 </script>
 
-<Tabs {selected}>
-	<!--
-		Every tab is a real link, so a section is addressable, shareable and
-		reachable with the back button. Carbon 0.112 navigates rather than
-		intercepting whenever `href` is not the "#" placeholder, and SvelteKit
-		takes same-origin clicks from there.
+<!--
+	A navigation bar, not a tab strip.
 
-		This replaces a numeric `selectedTab` that six `{#if selectedTab === n}`
-		gates compared against, and a d3 pass that added and removed a class on
-		the panels to give them height. Both are gone: the route decides what
-		mounts, and there is no index to get wrong.
-	-->
-	<Tab label="Search" href={resolve('/')} />
+	These controls change the URL and mount a different route; they do not toggle
+	panels on the current page. Carbon's Tabs gave them `role="tab"` and
+	`aria-selected`, which tells a screen reader to expect a tabpanel that never
+	arrives, and shipped the vertical dividers and default chrome besides. A
+	`<nav>` of links with `aria-current="page"` is what this actually is — and the
+	styling below is ours rather than a fight with Carbon's.
+-->
+<nav class="sections" aria-label="Sections">
+	<a href={resolve('/')}>Search</a>
 	{#each SECTIONS as s (s)}
-		<Tab label={title(s)} href={resolve(ROUTES[s], { city: cityPath })} />
+		<a
+			href={resolve(ROUTES[s], { city: cityPath })}
+			aria-current={s === section ? 'page' : undefined}>{title(s)}</a
+		>
 	{/each}
-</Tabs>
+</nav>
 
 {#if notFound}
 	<div class="notice">
@@ -87,6 +87,68 @@
 {/if}
 
 <style>
+	.sections {
+		display: flex;
+		align-items: stretch;
+		flex: 0 0 auto;
+		height: 3rem;
+		padding: 0 0.5rem;
+		border-bottom: 1px solid var(--cds-ui-03, #393939);
+		background-color: var(--cds-ui-background, #161616);
+		/* Scrolls rather than collapsing into a dropdown on a narrow viewport. */
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
+	}
+
+	.sections::-webkit-scrollbar {
+		display: none;
+	}
+
+	.sections a {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		padding: 0 1rem;
+		font-size: 0.875rem;
+		line-height: 1;
+		white-space: nowrap;
+		text-decoration: none;
+		color: var(--cds-text-02, #c6c6c6);
+		transition:
+			color 70ms linear,
+			background-color 70ms linear;
+	}
+
+	.sections a:hover {
+		color: var(--cds-text-01, #f4f4f4);
+		background-color: var(--cds-ui-01, #262626);
+	}
+
+	.sections a:focus-visible {
+		outline: 2px solid var(--cds-focus, #ffffff);
+		outline-offset: -2px;
+	}
+
+	.sections a[aria-current='page'] {
+		color: var(--cds-text-01, #f4f4f4);
+		font-weight: 600;
+	}
+
+	/*
+		The indicator sits on the bar's own bottom border rather than adding height,
+		so switching section cannot shift the row by a pixel.
+	*/
+	.sections a[aria-current='page']::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: -1px;
+		height: 2px;
+		background-color: var(--cds-interactive-01, #0f62fe);
+	}
+
 	.notice {
 		flex-grow: 1;
 		display: flex;

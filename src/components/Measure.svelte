@@ -29,10 +29,16 @@
 <ToolPane>
 	<svelte:fragment slot="rail">
 		<NewIndexesSummary {metadata} />
-		<Legend {metadata} />
 	</svelte:fragment>
 
 	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded />
+
+	<!--
+		The scale sits on the map, the way Create's and Draw's do. It was in the
+		rail, which put it a long way from the colours it explains and made Measure
+		the odd one out among the five panes.
+	-->
+	<Legend {metadata} />
 
 	{#if map && mapLoaded && styleLoaded}
 		<AccessibilityLayer {map} {metadata} />
