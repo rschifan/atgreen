@@ -285,6 +285,39 @@ test.describe('ATGreen smoke', () => {
 			expect(widths[0], 'each map should be substantial').toBeGreaterThan(200);
 		});
 
+		test('nothing overlaid on a map is stretched to the map itself', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/draw');
+			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(2, { timeout: 20000 });
+
+			// `.map-root > :global(div)` was meant to size the map's own container,
+			// but <slot /> renders into .map-root too, so the rule also handed
+			// `height: 100%` to the slotted legend and map header. BaseLegend is
+			// `position: absolute; bottom: 1.5rem; max-width: 25rem` over a dark
+			// translucent background — at full height that drew a 400px-wide black
+			// column down the middle of the Before map and pushed its colour ramp
+			// clean off the top edge.
+			const overlays = await page.$$eval('.map-root', (roots) =>
+				roots.flatMap((root) => {
+					const rootHeight = root.getBoundingClientRect().height;
+					return [...root.children]
+						.filter((child) => !child.classList.contains('map-canvas'))
+						.map((child) => ({
+							cls: child.className.toString(),
+							ratio: rootHeight ? child.getBoundingClientRect().height / rootHeight : 0
+						}));
+				})
+			);
+
+			// Without this the test passes by finding nothing to check, which is the
+			// failure mode every layout assertion in this file has had at least once.
+			expect(overlays.length, 'expected at least one overlay inside a map').toBeGreaterThan(0);
+
+			for (const overlay of overlays) {
+				expect(overlay.ratio, `overlay "${overlay.cls}" fills its whole map`).toBeLessThan(0.9);
+			}
+		});
+
 		test('the rail becomes a drawer on a narrow viewport', async ({ page }) => {
 			await stubBackend(page);
 			await page.setViewportSize({ width: 375, height: 812 });
@@ -375,6 +408,20 @@ test.describe('ATGreen smoke', () => {
 		fraction of real barriers, so a green run here is a floor, not a pass.
 	*/
 	test.describe('accessibility', () => {
+		/*
+			Name the offending nodes, not just the rule. "color-contrast (2)" tells you
+			a rule broke but not where, which turns every failure into a bisect. Axe
+			already carries the selector and the measured ratio in `failureSummary`.
+		*/
+		const describe_violations = (
+			violations: { id: string; impact?: string | null; nodes: { target: unknown[] }[] }[]
+		) =>
+			violations
+				.map(
+					(v) => `${v.id} [${v.impact}] -> ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`
+				)
+				.join('; ');
+
 		const scan = (page: Page) =>
 			new AxeBuilder({ page })
 				.withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -391,8 +438,7 @@ test.describe('ATGreen smoke', () => {
 			await expect(page.getByRole('button', { name: /Select a city/ })).toBeVisible();
 
 			const { violations } = await scan(page);
-			const summary = violations.map((v) => `${v.id} (${v.nodes.length}) [${v.impact}]`);
-			expect(violations.length, `landing: ${summary.join(', ')}`).toBeLessThanOrEqual(
+			expect(violations.length, `landing: ${describe_violations(violations)}`).toBeLessThanOrEqual(
 				A11Y_BUDGET.landing
 			);
 		});
@@ -403,8 +449,7 @@ test.describe('ATGreen smoke', () => {
 			await expect(page.locator('button.tile').first()).toBeVisible({ timeout: 20000 });
 
 			const { violations } = await scan(page);
-			const summary = violations.map((v) => `${v.id} (${v.nodes.length}) [${v.impact}]`);
-			expect(violations.length, `measure: ${summary.join(', ')}`).toBeLessThanOrEqual(
+			expect(violations.length, `measure: ${describe_violations(violations)}`).toBeLessThanOrEqual(
 				A11Y_BUDGET.measure
 			);
 		});

@@ -14,3 +14,7 @@ vite.config.ts.timestamp-*
 /playwright-report
 /blob-report
 /playwright/.cache
+
+# Deploy staging (docs/DEPLOY.md assembles these; never committed)
+release/
+release.tgz

@@ -2,7 +2,7 @@
 	import { scaleDiverging, scaleLinear } from 'd3-scale';
 	import { format, max, min } from 'd3';
 	import { afterUpdate, onDestroy, onMount } from 'svelte';
-	import { AV_COLOR_GREEN, AV_COLOR_RED, AV_COLOR_WHITE, ToRGBA } from '../../js/colors';
+	import { AV_COLOR_GREEN, AV_COLOR_MID, AV_COLOR_RED, ToRGBA } from '../../js/colors';
 	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types';
 
 	export let index_type: number;
@@ -31,16 +31,33 @@
 		color: '#AAA'
 	};
 
+	/*
+		The ramp is drawn as 40 discrete rects. Stroking each one in black turned a
+		continuous scale into a barcode — the gaps read as class breaks that the
+		data does not have. No stroke, so the 40 steps render as the gradient they
+		are meant to be.
+	*/
 	let legend = {
 		height: 8,
-		stroke: 'black',
-		stroke_width: 1,
+		stroke: 'none',
+		stroke_width: 0,
 		font_color: 'white'
 	};
 
 	let n_steps = 40;
 	let n_xticks = 4;
 	let width_class: number;
+	/*
+		The log transform goes in a LOCAL, never back into `threshold`.
+
+		`threshold` is bound out to Create's and Draw's `current_target`, so
+		`threshold = Math.log(threshold)` here overwrote the user's target with its
+		own logarithm on every afterUpdate: 9 -> 2.197 -> 0.787 -> -0.239 -> NaN,
+		which is the "Target — NaN sq m" on the Create rail. The map ramp was
+		corrupted the same way twice over, because get_colormap_rule() applies
+		to_scale() to the threshold itself — it always wanted the raw value.
+	*/
+	let scaled_threshold: number;
 	let minv: number;
 	let maxv: number;
 
@@ -58,7 +75,7 @@
 	$: if (threshold !== undefined && threshold !== null) update();
 
 	function update() {
-		colorScale = scaleDiverging().domain([minv, threshold, maxv]).range(get_color_range());
+		colorScale = scaleDiverging().domain([minv, scaled_threshold, maxv]).range(get_color_range());
 	}
 
 	afterUpdate(() => {
@@ -89,10 +106,12 @@
 			if (classification == ClassificationScheme.LOGARITHMIC) {
 				minv = minv == 0 ? 0 : Math.log(minv);
 				maxv = maxv == 0 ? 0 : Math.log(maxv);
-				threshold = threshold == 0 ? 0 : Math.log(threshold);
+				scaled_threshold = threshold == 0 ? 0 : Math.log(threshold);
+			} else {
+				scaled_threshold = threshold;
 			}
 
-			colorScale = scaleDiverging().domain([minv, threshold, maxv]).range(get_color_range());
+			colorScale = scaleDiverging().domain([minv, scaled_threshold, maxv]).range(get_color_range());
 			xScale = scaleLinear().domain([0, n_steps]).range([minv, maxv]);
 			xTicksValueScale = scaleLinear().domain([0, n_xticks]).range([minv, maxv]);
 		}
@@ -104,9 +123,8 @@
 
 	function get_color_range(): string[] {
 		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE)
-			return [ToRGBA(AV_COLOR_GREEN, 1.0), ToRGBA(AV_COLOR_WHITE, 1.0), ToRGBA(AV_COLOR_RED, 1.0)];
-		else
-			return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_WHITE, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
+			return [ToRGBA(AV_COLOR_GREEN, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_RED, 1.0)];
+		else return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
 	}
 	let legend_node;
 	let parent_node;
@@ -144,8 +162,8 @@
 						y={margins.top + legend.height + ticks.margin + ticks.font}
 					>
 						{classification == ClassificationScheme.LOGARITHMIC
-							? format('.2s')(Math.round(Math.exp(xTicksValueScale(index))))
-							: format('.2s')(Math.round(xTicksValueScale(index)))}
+							? format('~s')(Math.round(Math.exp(xTicksValueScale(index))))
+							: format('~s')(Math.round(xTicksValueScale(index)))}
 					</text>
 
 					<line x1={xm} y1={y1m} x2={xm} y2={y2m} stroke="#AAA" stroke-width={ticks.stroke} />

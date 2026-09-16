@@ -9,18 +9,7 @@
 	import { CityStoreImpl } from '../../js/types';
 	import { current_accessibility_index, current_city, loading } from '../../stores/stores';
 
-	const props = {
-		margins: {
-			top: 15,
-			bottom: 10,
-			right: 5,
-			left: 5
-		},
-		stroke: { blur: 2, focus: 3 },
-		circle: { max_radius: 5, min_radius: 2 },
-		cell: { blur: 0.5, focus: 1.0, height: 24 },
-		labels: { left: 40, right: 60 }
-	};
+	export let metadata;
 
 	let get_city_profile_request = useWatcher(
 		() => get_city_profile($current_city?.text),
@@ -31,95 +20,61 @@
 		}
 	);
 
-	export let metadata;
+	const percentage_formatter = format('.0%');
 
-	let percentage_formatter = format('.0%');
 	let data: CityStoreImpl;
-	let width;
-	let text;
-
-	$: if (hovered_index) {
-		text =
-			percentage_formatter(data?.getIndex(hovered_index)) +
-			' of the population stasfies the target for ' +
-			hovered_index;
-	}
-
 	let unsubscribe_city_profile: Unsubscriber;
-	let unsubscribe_change_city_event: Unsubscriber;
-	let unsubscribe_change_accessibility_index_event: Unsubscriber;
-
-	onDestroy(() => {
-		if (unsubscribe_change_city_event) unsubscribe_change_city_event();
-		if (unsubscribe_change_accessibility_index_event)
-			unsubscribe_change_accessibility_index_event();
-		if (unsubscribe_city_profile) unsubscribe_city_profile();
-	});
 
 	onMount(() => {
-		if (!unsubscribe_change_city_event) subscribe_change_city_event();
-		if (!unsubscribe_change_accessibility_index_event) subscribe_change_accessibility_index_event();
-
 		unsubscribe_city_profile = get_city_profile_request.data.subscribe((value) => {
-			if (value) {
-				data = new CityStoreImpl($current_city);
+			if (!value) return;
 
-				for (let k of Object.keys(value)) {
-					data.addIndex(k, value[k]['v']);
-					data.addIndexPercentile(k, value[k]['p']);
-					data.addIndexDeciles(
-						k,
-						value[k]['d']
-							.substring(1, value[k]['d'].length - 1)
-							.split(',')
-							.map((c) => {
-								return parseFloat(c);
-							})
-					);
-				}
-				loading.set(false);
+			const next = new CityStoreImpl($current_city);
+
+			for (let k of Object.keys(value)) {
+				next.addIndex(k, value[k]['v']);
+				next.addIndexPercentile(k, value[k]['p']);
+				next.addIndexDeciles(
+					k,
+					value[k]['d']
+						.substring(1, value[k]['d'].length - 1)
+						.split(',')
+						.map((c) => parseFloat(c))
+				);
 			}
+
+			data = next;
+			loading.set(false);
 		});
 	});
 
-	function subscribe_change_city_event() {
-		unsubscribe_change_city_event = current_city.subscribe((city: string | undefined) => {});
-	}
+	onDestroy(() => {
+		if (unsubscribe_city_profile) unsubscribe_city_profile();
+	});
 
-	function subscribe_change_accessibility_index_event() {
-		unsubscribe_change_accessibility_index_event = current_accessibility_index.subscribe(
-			(value: string | undefined) => {
-				selected_index = value;
-			}
-		);
-	}
-
-	let hovered_index: string | undefined;
-	let selected_index: string | undefined;
-	let hovered_index_position: number;
-	let hovered_index_rank: number;
-
-	function focus(id: string, i: number, rank: number) {
-		return () => {
-			hovered_index = id;
-			hovered_index_position = i;
-			hovered_index_rank = rank;
-		};
-	}
-
-	function leave() {
-		hovered_index = undefined;
-	}
+	/*
+		Three subscriptions, a `props` object, a `focus`/`leave` pair, `width`,
+		`text`, `hovered_index*` and `selected_index` used to live here. None was
+		read by the markup — `selected_index` mirrored a store the template already
+		reads directly, and one subscriber's whole body was `() => {}`. They ran on
+		every city change and held the component alive after it was destroyed.
+	*/
 
 	function click(index: string): void {
-		if (index) {
-			current_accessibility_index.set(index);
-		}
+		if (index) current_accessibility_index.set(index);
 	}
 </script>
 
 {#if data}
-	<div bind:clientWidth={width} class="index-container">
+	<!--
+		No `margin: auto` here. The rail is a flex column, so auto margins absorbed
+		every pixel of free space: the tiles floated to the vertical middle of an
+		empty panel and pushed the legend to the floor. Both looked like separate
+		layout bugs; they were this one line.
+	-->
+	<section class="indexes">
+		<h2 class="eyebrow">Accessibility index</h2>
+
 		<!--
 			Real buttons. These were bare <div on:click> with an empty on:keypress
 			and a svelte-ignore, and they are the ONLY way to change the index:
@@ -141,62 +96,79 @@
 					aria-pressed={$current_accessibility_index === item[0]}
 					on:click={() => click(item[0])}
 				>
-					<span class="index-label">{item[0]}</span>
-					<span class="tile-row">
+					<span class="tile-name">{item[0]}</span>
+					<span class="tile-stat">
 						<UserMultiple size={16} />
-						<span class="target-label">{percentage_formatter(item[1])}</span>
+						<span>{percentage_formatter(item[1])}</span>
+						<span class="sr-only">of residents meet the target</span>
 					</span>
-					<span class="tile-row">
+					<span class="tile-stat">
 						<ArrowsVertical size={16} />
-						<span class="rank-label">{data.getPercentile(item[0])}th</span>
+						<span>{data.getPercentile(item[0])}th</span>
+						<span class="sr-only">percentile among all cities</span>
 					</span>
 				</button>
 			{/each}
 		</div>
+	</section>
 
-		<!-- `{#if metadata}` was not enough: getTarget() returns undefined for an index
-		     that has not loaded yet, and .description on that throws. -->
-		{#if metadata?.getTarget($current_accessibility_index)}
-			<div class="description">
-				What does {$current_accessibility_index} measure? {metadata.getTarget(
-					$current_accessibility_index
-				)?.description}
-			</div>
-		{/if}
-
-		<!-- {#if $current_city}
-			<div>
-				{percentage_formatter(data.getIndex($current_accessibility_index))} of the population of {$current_city?.text}
-				meet the target for {$current_accessibility_index}.
-			</div>
-		{/if} -->
-	</div>
+	<!-- `{#if metadata}` was not enough: getTarget() returns undefined for an index
+	     that has not loaded yet, and .description on that throws. -->
+	{#if metadata?.getTarget($current_accessibility_index)}
+		<section class="explainer">
+			<h2 class="eyebrow">What {$current_accessibility_index} measures</h2>
+			<p class="description">
+				{metadata.getTarget($current_accessibility_index)?.description}
+			</p>
+		</section>
+	{/if}
 {/if}
 
 <style>
+	.indexes,
+	.explainer {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.eyebrow {
+		margin: 0;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--cds-text-05, #8d8d8d);
+	}
+
 	.tiles {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
-		gap: 4px;
+		gap: 2px;
 	}
 
+	/*
+		The border is a fixed 2px on every edge state, so selecting a tile cannot
+		change its height. The old rule added `border-bottom: 2px` only when
+		selected, which made that tile 1px taller and nudged its whole grid row.
+	*/
 	.tile {
 		display: flex;
 		flex-direction: column;
-		gap: 1px;
-		width: 100%;
-		padding: 0.45rem 0.5rem;
-		border: 1px solid transparent;
-		background-color: rgba(90, 90, 90, 0.2);
+		gap: 0.125rem;
+		padding: 0.5rem 0.625rem;
+		border: 0;
+		border-left: 2px solid transparent;
+		background-color: var(--cds-ui-02, #262626);
 		color: inherit;
 		font: inherit;
-		font-weight: 300;
 		text-align: left;
 		cursor: pointer;
+		transition: background-color 70ms linear;
 	}
 
 	.tile:hover {
-		background-color: rgba(120, 120, 120, 0.35);
+		background-color: var(--cds-ui-03, #393939);
 	}
 
 	.tile:focus-visible {
@@ -204,58 +176,62 @@
 		outline-offset: -2px;
 	}
 
+	/*
+		--cds-text-04 is Carbon's "text on an interactive background" token, which is
+		what this is. It was rgba(255,255,255,0.92), and 8% of #0f62fe bleeding
+		through dropped the stats to ~4.5:1 — right on the WCAG 1.4.3 line, and axe
+		scored it under. Opaque white is 5.05:1.
+	*/
 	.tile.selected {
-		background-color: #0f62fe;
+		background-color: var(--cds-interactive-01, #0f62fe);
+		border-left-color: #ffffff;
+		color: var(--cds-text-04, #ffffff);
+		cursor: default;
 	}
 
-	.tile-row {
+	.tile-name {
+		font-size: 0.875rem;
+		font-weight: 600;
+		line-height: 1.2;
+	}
+
+	.tile-stat {
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
+		font-size: 0.8125rem;
+		/* Percentages and ranks read as a column, so the digits have to align. */
+		font-variant-numeric: tabular-nums;
+		color: var(--cds-text-02, #c6c6c6);
 	}
 
-	.internal {
-		padding-top: 5px;
-		padding-bottom: 5px;
-		border-top-left-radius: 5px;
-		border-top-right-radius: 5px;
-
-		background-color: rgba(90, 90, 90, 0.2);
-		font-weight: 300;
+	.tile.selected .tile-stat {
+		color: var(--cds-text-04, #ffffff);
 	}
 
-	.internal:hover {
-		/* background-color: rgba(120, 120, 120, 0.5); */
-		cursor: pointer;
-		border-bottom: 2px solid;
+	.tile-stat :global(svg) {
+		flex: 0 0 auto;
+		fill: currentColor;
+		opacity: 0.6;
 	}
 
-	.index-label {
-		font-size: 1rem;
-		font-weight: 800;
-		padding-bottom: 1px;
-	}
-	.target-label {
-		font-size: 0.85rem;
-		text-align: right;
-	}
-	.rank-label {
-		font-size: 0.85rem;
-		text-align: right;
+	.description {
+		margin: 0;
+		font-size: 0.8125rem;
+		line-height: 1.45;
+		color: var(--cds-text-02, #c6c6c6);
 	}
 
-	.selected {
-		background-color: #0f62fe;
-		border-bottom: 2px solid;
-		pointer-events: none;
-	}
-
-	.index-container {
-		margin: auto;
-	}
-
-	div.description {
-		font-weight: 300;
-		font-size: 0.9em;
+	/* The icons carry meaning that colour and shape alone do not. */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 </style>

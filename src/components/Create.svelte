@@ -327,7 +327,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--cds-text-03, #6f6f6f);
+		color: var(--cds-text-05, #8d8d8d);
 		text-align: center;
 		padding: 1rem;
 	}

@@ -57,6 +57,25 @@
 		margin-bottom: 0;
 	}
 
+	/*
+		Carbon sizes a ContentSwitcher for a content column, not a 300px rail: at
+		its default 0.875rem type and 1rem of padding per side, three switches get
+		~57px of text width each and "Exposure" and "Per person" render as
+		"Expos..." and "Per pe...". The labels are the whole control — there is no
+		other place in the UI that says which index you are looking at — so the
+		type and padding give way instead.
+	*/
+	.rail :global(.bx--content-switcher-btn) {
+		padding-inline: 0.5rem;
+		font-size: 0.75rem;
+		justify-content: center;
+	}
+
+	.rail :global(.bx--content-switcher__label) {
+		overflow: visible;
+		text-overflow: clip;
+	}
+
 	.stage {
 		position: relative;
 		flex: 1 1 auto;

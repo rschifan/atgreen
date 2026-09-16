@@ -3,7 +3,12 @@
 <script lang="ts">
 	import { format } from 'd3';
 	import ToolPane from './ToolPane.svelte';
-	import { mapbox } from 'mapbox-gl';
+	// Type-only, and from our own module. This was a VALUE import of a named
+	// export that mapbox-gl (CommonJS) does not have — `mapbox` is its default.
+	// Rolldown dropped it as unused so the production bundle was fine, which is
+	// why it went unnoticed; `vite dev` evaluates it for real and every map route
+	// answered 500. Every other component already imports from js/mapbox.
+	import type { mapbox } from '../js/mapbox';
 	import {
 		Button,
 		Checkbox,
