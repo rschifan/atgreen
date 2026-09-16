@@ -110,3 +110,41 @@ export function get_accessibility_layer_fill_opacity() {
 // ['case', get_target_rule(predicate, threshold), 0.8, 0.4]
 // ]
 // }
+
+/**
+ * One filter expression for Explore's green-areas layers.
+ *
+ * Explore has three independent controls — type, minimum size, name — and each
+ * used to call `setFilter` from its own reactive block with a COMPLETE
+ * replacement expression. `setFilter` does not merge, so whichever block ran
+ * last silently discarded the other two. Reproduced on production: set the size
+ * slider to "576 ha and larger", then untick one type, and every small area
+ * comes back while the slider still reads 576.
+ *
+ * Combining them here means the three controls compose, and the result is a
+ * pure function that can be tested without a map.
+ *
+ * @param types selected `osm_value` codes, or undefined for "no type filter"
+ * @param min_size hectares; 0 and undefined both mean "no size filter"
+ * @param names matching `osm_name` values, or undefined when the search is empty
+ */
+export function build_greenareas_filter(
+	types?: number[],
+	min_size?: number,
+	names?: string[]
+): unknown[] | null {
+	const conditions: unknown[] = [];
+
+	if (Array.isArray(types)) conditions.push(['in', ['get', 'osm_value'], ['literal', types]]);
+
+	// `> 0`, not `>= 0`: a minimum of zero excludes nothing, and adding it would
+	// drop features whose size is missing rather than leaving them alone.
+	if (typeof min_size === 'number' && Number.isFinite(min_size) && min_size > 0)
+		conditions.push(['>=', ['get', 'size'], min_size]);
+
+	if (Array.isArray(names)) conditions.push(['in', ['get', 'osm_name'], ['literal', names]]);
+
+	// `null` clears the filter. An empty `['all']` would also match everything,
+	// but null is what Mapbox documents for "no filter" and keeps the style clean.
+	return conditions.length > 0 ? ['all', ...conditions] : null;
+}
