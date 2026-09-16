@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { scaleDiverging, scaleLinear } from 'd3-scale';
-	import { format, max, min } from 'd3';
+	import { format } from 'd3';
 	import { afterUpdate, onDestroy, onMount } from 'svelte';
 	import { AV_COLOR_GREEN, AV_COLOR_MID, AV_COLOR_RED, ToRGBA } from '../../js/colors';
+	import { is_clamped_high, robust_bounds } from '../../js/layers';
 	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types';
 
 	export let index_type: number;
@@ -58,6 +59,8 @@
 		to_scale() to the threshold itself — it always wanted the raw value.
 	*/
 	let scaled_threshold: number;
+	/** True when the top of the ramp is a percentile, not the real maximum. */
+	let clamped_high = false;
 	let minv: number;
 	let maxv: number;
 
@@ -100,8 +103,13 @@
 		if (data && data.features.length > 0) {
 			const accessibility_values: number[] = [...data.features.map((o: any) => o.properties.v)];
 
-			minv = min(accessibility_values);
-			maxv = max(accessibility_values);
+			/*
+				The SAME bounds the map's colour ramp uses — get_colormap_rule clamps
+				outliers off, and a legend drawn from raw min/max would disagree with
+				the map it explains.
+			*/
+			({ min: minv, max: maxv } = robust_bounds(accessibility_values, threshold));
+			clamped_high = is_clamped_high(accessibility_values, threshold);
 
 			if (classification == ClassificationScheme.LOGARITHMIC) {
 				minv = minv == 0 ? 0 : Math.log(minv);
@@ -161,9 +169,10 @@
 						x={margins.left + (index * innerWidth) / n_xticks}
 						y={margins.top + legend.height + ticks.margin + ticks.font}
 					>
-						{classification == ClassificationScheme.LOGARITHMIC
+						{(classification == ClassificationScheme.LOGARITHMIC
 							? format('~s')(Math.round(Math.exp(xTicksValueScale(index))))
-							: format('~s')(Math.round(xTicksValueScale(index)))}
+							: format('~s')(Math.round(xTicksValueScale(index)))) +
+							(index === n_xticks && clamped_high ? '+' : '')}
 					</text>
 
 					<line x1={xm} y1={y1m} x2={xm} y2={y2m} stroke="#AAA" stroke-width={ticks.stroke} />
@@ -172,15 +181,34 @@
 				<text
 					dominant-baseline="middle"
 					alignment-baseline="middle"
-					text-anchor="left"
+					text-anchor="start"
 					font-weight="normal"
 					font-size={ticks.font}
 					fill={legend.font_color}
 					x={margins.left}
 					y={margins.top - ticks.font}
 				>
-					classification: {classification} unit: {unit}
+					{classification} &middot; {unit}{Number.isFinite(threshold)
+						? ` · target ${threshold}`
+						: ''}
 				</text>
+
+				<!--
+					Where the colour turns. Without it the ramp shows a break with no
+					explanation — which is how ESA's 1.4%-wide below-target band read as
+					"near zero" rather than "misses the target".
+				-->
+				{#if maxv > minv && scaled_threshold >= minv && scaled_threshold <= maxv}
+					{@const mx = margins.left + ((scaled_threshold - minv) / (maxv - minv)) * innerWidth}
+					<line
+						x1={mx}
+						y1={margins.top - 3}
+						x2={mx}
+						y2={margins.top + legend.height + 3}
+						stroke="#ffffff"
+						stroke-width="1.5"
+					/>
+				{/if}
 
 				<line
 					x1={margins.left}

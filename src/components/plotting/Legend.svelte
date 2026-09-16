@@ -5,10 +5,10 @@
 		current_accessibility_index_data
 	} from '../../stores/stores';
 
-	import { max, min } from 'd3-array';
 	import { onMount, onDestroy, afterUpdate } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { AV_COLOR_GREEN, AV_COLOR_MID, AV_COLOR_RED, ToRGBA } from '../../js/colors';
+	import { is_clamped_high, robust_bounds } from '../../js/layers';
 	import { AccessibilityIndexImpl, ClassificationScheme } from '../../js/types';
 	import { format } from 'd3';
 
@@ -27,8 +27,13 @@
 						return el.properties.v;
 					});
 
-					minv = min(data);
-					maxv = max(data);
+					/*
+						The SAME bounds the map's colour ramp uses. Taking raw min/max
+						here while get_colormap_rule clamps outliers would put a legend on
+						screen that disagrees with the map it explains.
+					*/
+					({ min: minv, max: maxv } = robust_bounds(data, threshold));
+					clamped_high = is_clamped_high(data, threshold);
 
 					// if (metadata) current = metadata.getTarget($current_accessibility_index).index;
 					// if (metadata) threshold = metadata.getTarget($current_accessibility_index).threshold;
@@ -44,6 +49,8 @@
 						maxv = maxv == 0 ? 0 : Math.log(maxv);
 						scaled_threshold = threshold == 0 ? 0 : Math.log(threshold);
 					}
+
+					marker_value = scaled_threshold;
 
 					colorScale = scaleDiverging()
 						.domain([minv, scaled_threshold, maxv])
@@ -138,6 +145,10 @@
 	let xScale;
 	let xTicksValueScale;
 	let threshold: number;
+	/** The target, in the same scaled space as minv/maxv, for the legend marker. */
+	let marker_value: number;
+	/** True when the top of the ramp is a percentile, not the real maximum. */
+	let clamped_high = false;
 
 	// `metadata.getTarget(x)` returns undefined for an index that is not loaded yet,
 	// and these ran before $current_accessibility_index was set. Svelte 4 happened to
@@ -158,8 +169,16 @@
 {#if $current_accessibility_index_data && current && !loading}
 	<div bind:this={legend_node} bind:clientWidth={containerWidth} class="legend-container">
 		<figure>
+			<!--
+				The caption names the target, so the white notch on the ramp below has a
+				meaning. Without it the colour simply changes partway along for no
+				stated reason — which is how ESA's 1.4%-wide below-target band read as
+				"near zero" instead of "misses the target".
+			-->
 			<figcaption class="eyebrow">
-				{current.classification} scale &middot; {current.unit}
+				{current.classification} scale &middot; {current.unit}{Number.isFinite(threshold)
+					? ` · target ${threshold}`
+					: ''}
 			</figcaption>
 			<svg height={margins.top + margins.bottom + legend.height + ticks.margin} {width}>
 				{#each Array(n_steps) as _, index (index)}
@@ -189,9 +208,10 @@
 						x={margins.left + (index * innerWidth) / n_xticks}
 						y={margins.top + legend.height + ticks.margin + ticks.font}
 					>
-						{current.classification == ClassificationScheme.LOGARITHMIC
+						{(current.classification == ClassificationScheme.LOGARITHMIC
 							? format('~s')(Math.round(Math.exp(xTicksValueScale(index))))
-							: format('~s')(Math.round(xTicksValueScale(index)))}
+							: format('~s')(Math.round(xTicksValueScale(index)))) +
+							(index === n_xticks && clamped_high ? '+' : '')}
 					</text>
 
 					<line x1={xm} y1={y1m} x2={xm} y2={y2m} stroke="#AAA" stroke-width={ticks.stroke} />
@@ -205,6 +225,23 @@
 					stroke={ticks.color}
 					stroke-width={ticks.stroke}
 				/>
+
+				<!--
+					Where the colour turns. Without this the ramp shows a break with no
+					explanation, which is how ESA's 1.4%-wide below-target band read as
+					"near zero" rather than "misses the target".
+				-->
+				{#if maxv > minv && marker_value >= minv && marker_value <= maxv}
+					{@const mx = margins.left + ((marker_value - minv) / (maxv - minv)) * innerWidth}
+					<line
+						x1={mx}
+						y1={margins.top - 3}
+						x2={mx}
+						y2={margins.top + legend.height + 3}
+						stroke="#ffffff"
+						stroke-width="1.5"
+					/>
+				{/if}
 			</svg>
 		</figure>
 	</div>
