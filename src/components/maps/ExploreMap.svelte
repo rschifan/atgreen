@@ -4,6 +4,7 @@
 	import { afterUpdate, onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR } from '../../js/colors';
+	import { build_greenareas_filter } from '../../js/layers';
 	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
 	import { adjust_zoom, create_empty_geojson, refit_zoom, html } from '../../js/utils';
 	import { current_city } from '../../stores/stores.js';
@@ -66,48 +67,28 @@
 		}
 	}
 
-	$: if (minimum_size >= 0) {
-		filter_by_size(minimum_size);
-	}
+	/*
+		ONE filter, not three. Each control used to call `setFilter` from its own
+		reactive block with a complete replacement expression, and `setFilter` does
+		not merge — so whichever block ran last silently discarded the others.
+		Reproduced on production: set the slider to "576 ha and larger", untick one
+		type, and every small area returns while the slider still reads 576.
 
-	$: if (green_types) {
-		filter_by_greentype(green_types);
-	}
+		`build_greenareas_filter` composes them and is unit tested without a map.
+	*/
+	$: apply_filter(map, green_types, minimum_size, selected_green_areas);
 
-	$: if (selected_green_areas) {
-		filter_by_name(selected_green_areas);
-	} else {
-		if (map && map.getLayer(GREENAREAS_LAYER) && map.getLayer(GREENAREAS_LABELS_LAYER)) {
-			map.setFilter(GREENAREAS_LABELS_LAYER);
-			map.setFilter(GREENAREAS_LAYER);
+	function apply_filter(
+		target: mapbox.Map | undefined,
+		types: number[] | undefined,
+		min_size: number | undefined,
+		names: string[] | undefined
+	) {
+		if (!target) return;
+		const filter = build_greenareas_filter(types, min_size, names);
+		for (const layer of [GREENAREAS_LAYER, GREENAREAS_LABELS_LAYER]) {
+			if (target.getLayer(layer)) target.setFilter(layer, filter);
 		}
-	}
-
-	function filter_by_size(minv: number) {
-		if (map && map.getLayer(GREENAREAS_LAYER))
-			map.setFilter(GREENAREAS_LAYER, ['>=', ['get', 'size'], minv]);
-		if (map && map.getLayer(GREENAREAS_LABELS_LAYER))
-			map.setFilter(GREENAREAS_LABELS_LAYER, ['>=', ['get', 'size'], minv]);
-	}
-
-	function filter_by_greentype(types: []) {
-		if (map && map.getLayer(GREENAREAS_LAYER))
-			map.setFilter(GREENAREAS_LAYER, ['in', ['get', 'osm_value'], ['literal', green_types]]);
-
-		if (map && map.getLayer(GREENAREAS_LABELS_LAYER))
-			map.setFilter(GREENAREAS_LABELS_LAYER, [
-				'in',
-				['get', 'osm_value'],
-				['literal', green_types]
-			]);
-	}
-
-	function filter_by_name(greenareas: []) {
-		if (map && map.getLayer(GREENAREAS_LAYER))
-			map.setFilter(GREENAREAS_LAYER, ['in', ['get', 'osm_name'], ['literal', greenareas]]);
-
-		if (map && map.getLayer(GREENAREAS_LABELS_LAYER))
-			map.setFilter(GREENAREAS_LABELS_LAYER, ['in', ['get', 'osm_name'], ['literal', greenareas]]);
 	}
 
 	onMount(() => {

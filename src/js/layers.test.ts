@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extent, get_colormap_rule, spread, to_scale } from './layers';
+import { build_greenareas_filter, extent, get_colormap_rule, spread, to_scale } from './layers';
 import { AccessibilityIndexType, ClassificationScheme } from './types';
 
 describe('extent', () => {
@@ -124,5 +124,43 @@ describe('get_colormap_rule', () => {
 				5
 			)
 		).not.toThrow();
+	});
+});
+
+describe('build_greenareas_filter', () => {
+	it('combines every active control instead of replacing them', () => {
+		// The bug: three reactive blocks each called setFilter with a complete
+		// expression, so the last one to run discarded the others. Reproduced on
+		// production — slider at "576 ha and larger" plus a type change brought
+		// every small area back.
+		const filter = build_greenareas_filter([1, 2], 10, ['Parco Valentino']);
+		expect(filter?.[0]).toBe('all');
+		expect(filter).toHaveLength(4);
+		expect(filter).toContainEqual(['in', ['get', 'osm_value'], ['literal', [1, 2]]]);
+		expect(filter).toContainEqual(['>=', ['get', 'size'], 10]);
+		expect(filter).toContainEqual(['in', ['get', 'osm_name'], ['literal', ['Parco Valentino']]]);
+	});
+
+	it('keeps the size constraint when the type selection changes', () => {
+		const before = build_greenareas_filter([0, 1, 2], 576, undefined);
+		const after = build_greenareas_filter([0, 1], 576, undefined);
+		for (const f of [before, after]) expect(f).toContainEqual(['>=', ['get', 'size'], 576]);
+	});
+
+	it('omits controls that are not filtering', () => {
+		expect(build_greenareas_filter(undefined, undefined, undefined)).toBeNull();
+		// A minimum of zero excludes nothing, so it must not add a condition that
+		// would drop features with no size at all.
+		expect(build_greenareas_filter(undefined, 0, undefined)).toBeNull();
+		expect(build_greenareas_filter(undefined, NaN, undefined)).toBeNull();
+	});
+
+	it('treats an empty selection as "match nothing", not "match everything"', () => {
+		// Deselecting every type must empty the map, not silently show all of it —
+		// the same inversion that get_green_types_code used to produce.
+		expect(build_greenareas_filter([], undefined, undefined)).toEqual([
+			'all',
+			['in', ['get', 'osm_value'], ['literal', []]]
+		]);
 	});
 });
