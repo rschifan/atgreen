@@ -1,9 +1,22 @@
-export const AV_COLOR_GREEN = [84, 180, 53];
-export const AV_COLOR_RED = [178, 24, 43];
-export const AV_COLOR_WHITE = [255, 255, 255];
+/*
+	The diverging ramp for every accessibility choropleth and its legend.
+
+	It was green -> PURE WHITE -> red. Pure white is the brightest colour a screen
+	can emit, so on this dark satellite basemap the midpoint — which means "at the
+	target", the least remarkable thing a cell can be — glared harder than either
+	extreme, and the map read as washed-out pink. These are ColorBrewer RdYlGn's
+	endpoints with its pale-yellow neutral: the two ends stay unambiguous against
+	terrain, and the midpoint recedes the way a midpoint should.
+
+	Named MID, not WHITE, because it is the value of the class break rather than a
+	colour anyone should reuse for text or chrome.
+*/
+export const AV_COLOR_GREEN = [26, 152, 80];
+export const AV_COLOR_RED = [215, 48, 39];
+export const AV_COLOR_MID = [255, 255, 191];
 export const ACOLOR_GREEN: string = ToHEX(AV_COLOR_GREEN);
 export const ACOLOR_RED: string = ToHEX(AV_COLOR_RED);
-export const ACOLOR_WHITE: string = ToHEX(AV_COLOR_WHITE);
+export const ACOLOR_MID: string = ToHEX(AV_COLOR_MID);
 
 export const SELECTION_COLOR = '#AA4A44';
 export const TEXT_MAP_COLOR = '#BBBBBB';

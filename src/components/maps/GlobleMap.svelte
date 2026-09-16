@@ -142,7 +142,7 @@
 </script>
 
 <div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
-	<div id={container} />
+	<div id={container} class="map-canvas" />
 
 	{#if map}
 		<slot />
@@ -161,7 +161,19 @@
 		inset: 0;
 	}
 
-	.map-root > :global(div) {
+	/*
+		This targets the map's own container, NOT "every div inside .map-root".
+
+		It used to be `.map-root > :global(div)`, and <slot /> renders its content
+		as a direct child of .map-root too — so the rule also sized the slotted
+		legend and Draw's map header. BaseLegend is `position: absolute; bottom:
+		1.5rem; max-width: 25rem` with a dark translucent background: given
+		`height: 100%` it became a 400px-wide, full-height dark rectangle down the
+		middle of the map, anchored at the bottom so its colour ramp overshot the
+		top edge. That is the black rectangle on the Before map, and the reason the
+		colour bar rendered at the top instead of above the bottom.
+	*/
+	.map-canvas {
 		width: 100%;
 		height: 100%;
 	}

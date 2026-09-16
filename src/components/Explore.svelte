@@ -171,7 +171,7 @@
 
 <style>
 	.count {
-		color: var(--cds-text-03, #6f6f6f);
+		color: var(--cds-text-05, #8d8d8d);
 		font-size: 0.82rem;
 		margin: 0;
 	}

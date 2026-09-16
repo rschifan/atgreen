@@ -1,4 +1,4 @@
-import { ACOLOR_GREEN, ACOLOR_RED, ACOLOR_WHITE, TEXT_MAP_COLOR } from './colors';
+import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from './colors';
 import { ClassificationScheme, AccessibilityIndexType } from './types';
 
 export function get_target_rule(operator: string, threshold: number) {
@@ -71,7 +71,7 @@ export function get_colormap_rule(
 		a,
 		type == AccessibilityIndexType.MINIMUM_DISTANCE ? ACOLOR_GREEN : ACOLOR_RED,
 		b,
-		ACOLOR_WHITE,
+		ACOLOR_MID,
 		c,
 		type == AccessibilityIndexType.MINIMUM_DISTANCE ? ACOLOR_RED : ACOLOR_GREEN
 	];

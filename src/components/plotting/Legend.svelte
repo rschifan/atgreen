@@ -8,7 +8,7 @@
 	import { max, min } from 'd3-array';
 	import { onMount, onDestroy, afterUpdate } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
-	import { AV_COLOR_GREEN, AV_COLOR_RED, AV_COLOR_WHITE, ToRGBA } from '../../js/colors';
+	import { AV_COLOR_GREEN, AV_COLOR_MID, AV_COLOR_RED, ToRGBA } from '../../js/colors';
 	import { AccessibilityIndexImpl, ClassificationScheme } from '../../js/types';
 	import { format } from 'd3';
 
@@ -33,13 +33,21 @@
 					// if (metadata) current = metadata.getTarget($current_accessibility_index).index;
 					// if (metadata) threshold = metadata.getTarget($current_accessibility_index).threshold;
 
+					// The log transform goes in a local. `threshold` is re-derived from
+					// `metadata` by a reactive statement, so logging it in place raced that
+					// statement and could log an already-logged value — the same
+					// corruption that reaches Create's rail as "Target — NaN sq m".
+					let scaled_threshold = threshold;
+
 					if (current && current.classification == ClassificationScheme.LOGARITHMIC) {
 						minv = minv == 0 ? 0 : Math.log(minv);
 						maxv = maxv == 0 ? 0 : Math.log(maxv);
-						threshold = threshold == 0 ? 0 : Math.log(threshold);
+						scaled_threshold = threshold == 0 ? 0 : Math.log(threshold);
 					}
 
-					colorScale = scaleDiverging().domain([minv, threshold, maxv]).range(get_color_range());
+					colorScale = scaleDiverging()
+						.domain([minv, scaled_threshold, maxv])
+						.range(get_color_range());
 					xScale = scaler().domain([0, n_steps]).range([minv, maxv]);
 					xTicksValueScale = scaler().domain([0, n_xticks]).range([minv, maxv]);
 
@@ -63,9 +71,8 @@
 
 	function get_color_range(): string[] {
 		if (current && current.ascending)
-			return [ToRGBA(AV_COLOR_GREEN, 1.0), ToRGBA(AV_COLOR_WHITE, 1.0), ToRGBA(AV_COLOR_RED, 1.0)];
-		else
-			return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_WHITE, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
+			return [ToRGBA(AV_COLOR_GREEN, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_RED, 1.0)];
+		else return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
 	}
 
 	let loading = false;
@@ -85,10 +92,15 @@
 	*/
 	let containerWidth: number = 0;
 
+	/*
+		`top` used to be 25 to reserve room for a caption drawn *inside* the svg as
+		<text>. The caption is now a real <figcaption>, so the svg only has to hold
+		the ramp and its ticks.
+	*/
 	let margins = {
-		top: 25,
+		top: 4,
 		right: 15,
-		bottom: 20,
+		bottom: 18,
 		left: 15
 	};
 
@@ -100,10 +112,16 @@
 		color: '#AAA'
 	};
 
+	/*
+		The ramp is drawn as 40 discrete rects. Stroking each one in black turned a
+		continuous scale into a barcode — the gaps read as class breaks that the
+		data does not have. No stroke, so the 40 steps render as the gradient they
+		are meant to be.
+	*/
 	let legend = {
 		height: 8,
-		stroke: 'black',
-		stroke_width: 1,
+		stroke: 'none',
+		stroke_width: 0,
 		font_color: 'white'
 	};
 
@@ -141,6 +159,9 @@
 {#if $current_accessibility_index_data && current && !loading}
 	<div bind:this={legend_node} bind:clientWidth={containerWidth} class="legend-container">
 		<figure>
+			<figcaption class="eyebrow">
+				{current.classification} scale &middot; {current.unit}
+			</figcaption>
 			<svg height={margins.top + margins.bottom + legend.height + ticks.margin} {width}>
 				{#each Array(n_steps) as _, index (index)}
 					<rect
@@ -170,25 +191,12 @@
 						y={margins.top + legend.height + ticks.margin + ticks.font}
 					>
 						{current.classification == ClassificationScheme.LOGARITHMIC
-							? format('.2s')(Math.round(Math.exp(xTicksValueScale(index))))
-							: format('.2s')(Math.round(xTicksValueScale(index)))}
+							? format('~s')(Math.round(Math.exp(xTicksValueScale(index))))
+							: format('~s')(Math.round(xTicksValueScale(index)))}
 					</text>
 
 					<line x1={xm} y1={y1m} x2={xm} y2={y2m} stroke="#AAA" stroke-width={ticks.stroke} />
 				{/each}
-
-				<text
-					dominant-baseline="middle"
-					alignment-baseline="middle"
-					text-anchor="left"
-					font-weight="normal"
-					font-size={ticks.font}
-					fill={legend.font_color}
-					x={margins.left}
-					y={margins.top - ticks.font}
-				>
-					classification: {current.classification} unit: {current.unit}
-				</text>
 
 				<line
 					x1={margins.left}
@@ -206,6 +214,21 @@
 <style>
 	div.legend-container {
 		color: white;
+	}
+
+	figure {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin: 0;
+	}
+
+	.eyebrow {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--cds-text-05, #8d8d8d);
 	}
 
 	line:hover,
