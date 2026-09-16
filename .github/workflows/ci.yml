@@ -6,18 +6,31 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Least privilege by default. No job here needs to write anything.
+# Least privilege by default. Neither job writes anything to GitHub; the deploy
+# job reaches the server over SSH with a key that is locked to a forced command.
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull-request run is safe to cancel when a newer commit lands. A run on main
+  # is not: it gates the deploy job below, and killing it mid-release can leave
+  # the server half switched. Only PR runs cancel.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The name is load-bearing: branch protection on main requires the
+  # "build-and-test" context by that exact string. Renaming this job makes every
+  # pull request unmergeable until the protection rule is updated to match.
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    outputs:
+      # The hashed entry chunk this run produced. The deploy job asserts the live
+      # site serves this exact filename, which is what makes "deployed" mean the
+      # bytes we tested rather than "the origin answered".
+      entry: ${{ steps.release.outputs.entry }}
 
     steps:
       # Third-party actions are pinned by commit SHA, not by tag: a tag can be moved
@@ -63,3 +76,128 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      - name: Assemble the release tarball
+        id: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # adapter-node externalises everything in `dependencies`, so build/ alone
+        # cannot serve the routes that use them — the release must carry its own
+        # production node_modules. Verified: without them, / returns 500 while
+        # /about returns 200, which is exactly the partial failure a shallow smoke
+        # test misses.
+        #
+        # This packages the build that the gates above just ran against. It is not
+        # rebuilt in the deploy job, so there is no window in which the artifact
+        # that ships differs from the artifact that passed.
+        run: |
+          set -euo pipefail
+          entry="$(basename "$(find build/client/_app/immutable/entry -name 'app.*.js' | head -1)")"
+          [ -n "$entry" ] || { echo "::error::no entry chunk in build/client"; exit 1; }
+          echo "entry=$entry" >> "$GITHUB_OUTPUT"
+
+          rm -rf release && mkdir release
+          cp -r build release/build
+          cp package.json package-lock.json release/
+          (cd release && npm ci --omit=dev --no-audit --no-fund)
+          tar -czf release.tgz -C release .
+          ls -lh release.tgz
+          echo "entry chunk: $entry"
+
+      - name: Upload the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release
+          path: release.tgz
+          retention-days: 7
+          compression-level: 0 # already a .tgz
+
+  deploy:
+    # Structural, not procedural: the deploy cannot start unless every gate above
+    # passed on this exact commit. The old deploy workflow ran in parallel with CI
+    # and repeated the gates itself, so main built and tested twice per push and
+    # the two runs could in principle disagree.
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_PUBLIC_URL }}
+
+    concurrency:
+      # Never two deploys at once: the switch is atomic, but two overlapping
+      # restarts are not. Deliberately not cancel-in-progress.
+      group: deploy-production
+      cancel-in-progress: false
+
+    steps:
+      - name: Download the release
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release
+
+      - name: Check the deploy configuration is present
+        env:
+          DEPLOY_KEY: ${{ secrets.ATGREEN_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ATGREEN_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$DEPLOY_KEY" ]   || missing="$missing ATGREEN_DEPLOY_KEY(secret)"
+          [ -n "$KNOWN_HOSTS" ]  || missing="$missing ATGREEN_SSH_KNOWN_HOSTS(secret)"
+          [ -n "${{ vars.DEPLOY_HOST }}" ] || missing="$missing DEPLOY_HOST(var)"
+          [ -n "${{ vars.DEPLOY_USER }}" ] || missing="$missing DEPLOY_USER(var)"
+          [ -n "${{ vars.DEPLOY_PUBLIC_URL }}" ] || missing="$missing DEPLOY_PUBLIC_URL(var)"
+          if [ -n "$missing" ]; then
+            echo "::error::missing on the production environment:$missing — see docs/DEPLOY.md"
+            exit 1
+          fi
+
+      - name: Ship it
+        env:
+          DEPLOY_KEY: ${{ secrets.ATGREEN_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ATGREEN_SSH_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        # The key is locked to a forced command on the server (see docs/DEPLOY.md),
+        # so it cannot run anything but the receiver — the commit SHA below arrives
+        # as SSH_ORIGINAL_COMMAND, not as a shell command. The receiver smoke-tests
+        # the new release on a spare port, switches the symlink, restarts, verifies
+        # the public URL and rolls back on its own if that fails.
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o IdentitiesOnly=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" "${GITHUB_SHA}" < release.tgz
+
+      - name: Confirm the live site serves the build we tested
+        env:
+          PUBLIC_URL: ${{ vars.DEPLOY_PUBLIC_URL }}
+          ENTRY: ${{ needs.build-and-test.outputs.entry }}
+        # This step used to assert HTTP 200 and nothing else, under this same name.
+        # 200 is what this site returned through BOTH of its real incidents — the
+        # unpinned-CDN stylesheet drift and the blank tool panels — so it could
+        # never have caught either. The entry chunk is content-hashed, so asserting
+        # the live HTML references the exact filename this run produced is a direct
+        # check that the bytes on the server are the bytes that passed the gates.
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            code="$(curl -fsS --max-time 20 "$PUBLIC_URL" -o /tmp/live.html -w '%{http_code}')" && break
+            echo "attempt $attempt failed, retrying"
+            sleep 5
+          done
+          [ "$code" = "200" ] || { echo "::error::public URL returned $code"; exit 1; }
+          if ! grep -q "$ENTRY" /tmp/live.html; then
+            echo "::error::live site does not reference $ENTRY — it is serving a different build"
+            grep -oE '/_app/immutable/entry/app\.[A-Za-z0-9_-]+\.js' /tmp/live.html | head -3
+            exit 1
+          fi
+          echo "Deployed ${GITHUB_SHA::8} — live site serves $ENTRY"
