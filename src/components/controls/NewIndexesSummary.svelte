@@ -133,12 +133,10 @@
 		layout bugs; they were this one line.
 	-->
 	<section class="indexes">
-		<h2 class="eyebrow">Accessibility index</h2>
-
 		{#each groups as group (group.key)}
 			<div class="group">
 				{#if group.label}
-					<h3 class="group-head">{group.label}</h3>
+					<h2 class="group-head">{group.label}</h2>
 				{/if}
 
 				<div class="rows">
@@ -192,26 +190,21 @@
 		gap: 0.75rem;
 	}
 
-	.eyebrow {
-		margin: 0;
-		font-size: 0.6875rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		/*
-			--cds-text-05 is the helper-text token (#8d8d8d, 5.5:1 on the rail).
-			--cds-text-03 is the PLACEHOLDER token (#6f6f6f) and fails WCAG 1.4.3 at
-			this size — axe caught exactly that here once already.
-		*/
-		color: var(--cds-text-05, #8d8d8d);
-	}
-
 	.group + .group {
 		margin-top: 0.75rem;
 		padding-top: 0.75rem;
 		border-top: 1px solid var(--cds-ui-03, #393939);
 	}
 
+	/*
+		The only heading in this rail now. An "Accessibility index" title above
+		these said nothing the group headings do not already say, in a 300px column
+		where every line has to earn its place.
+
+		--cds-text-05 is the helper-text token (#8d8d8d, 5.5:1 on the rail).
+		--cds-text-03 is the PLACEHOLDER token (#6f6f6f) and fails WCAG 1.4.3 at
+		this size — axe caught exactly that here once already.
+	*/
 	.group-head {
 		margin: 0 0 0.35rem 0.625rem;
 		font-size: 0.6875rem;
