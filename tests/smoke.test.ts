@@ -99,6 +99,15 @@ async function selectTurin(page: Page) {
  */
 const A11Y_BUDGET = { landing: 0, measure: 0 };
 
+/*
+	The section bar is a <nav> of links, not a Carbon tab strip: these navigate to
+	a route rather than toggling a panel, so they carry `aria-current="page"` and
+	not `role="tab"` / `aria-selected`. Scoped to `nav.sections`, because the
+	header panel offers links with the same names.
+*/
+const sectionLink = (page: Page, name: string) =>
+	page.locator('nav.sections').getByRole('link', { name, exact: true });
+
 test.describe('ATGreen smoke', () => {
 	test('landing page renders the question and the city picker', async ({ page }) => {
 		await stubBackend(page);
@@ -155,7 +164,7 @@ test.describe('ATGreen smoke', () => {
 		// Explore's 2.8 MB green-areas request must not happen until its tab is opened.
 		expect(rpcCalls).not.toContain('queryosmgreen');
 
-		await page.getByRole('tab', { name: 'Explore' }).click();
+		await sectionLink(page, 'Explore').click();
 		await expect.poll(() => rpcCalls.filter((c) => c === 'queryosmgreen').length).toBe(1);
 	});
 
@@ -172,17 +181,14 @@ test.describe('ATGreen smoke', () => {
 
 		// The HeaderAction button carries no accessible name; it is the panel toggle.
 		await page.locator('header button.bx--header__action').last().click();
-		await page.getByRole('link', { name: 'Compare', exact: true }).click();
+		await page.locator('header').getByRole('link', { name: 'Compare', exact: true }).click();
 
 		await page.waitForURL('**/Turin/compare');
-		await expect(page.getByRole('tab', { name: 'Compare' })).toHaveAttribute(
-			'aria-selected',
-			'true'
-		);
+		await expect(sectionLink(page, 'Compare')).toHaveAttribute('aria-current', 'page');
 		// The assertion that was missing when this shipped broken: the section has
 		// to actually render something.
 		await expect(page.locator('#main-content')).not.toBeEmpty();
-		await expect(page.locator('.bx--tabs')).toBeVisible();
+		await expect(page.locator('nav.sections')).toBeVisible();
 	});
 
 	test('a section URL can be opened directly, shared and navigated back', async ({ page }) => {
@@ -190,17 +196,17 @@ test.describe('ATGreen smoke', () => {
 
 		// Deep link, cold: no click path reached this, the URL alone did.
 		await page.goto('/Turin/draw');
-		await expect(page.getByRole('tab', { name: 'Draw' })).toHaveAttribute('aria-selected', 'true');
+		await expect(sectionLink(page, 'Draw')).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 20000 });
 
-		// Tabs are real links, so the URL follows the view...
-		await page.getByRole('tab', { name: 'Explore' }).click();
+		// They are real links, so the URL follows the view...
+		await sectionLink(page, 'Explore').click();
 		await page.waitForURL('**/Turin/explore');
 
 		// ...and the back button follows the URL.
 		await page.goBack();
 		await page.waitForURL('**/Turin/draw');
-		await expect(page.getByRole('tab', { name: 'Draw' })).toHaveAttribute('aria-selected', 'true');
+		await expect(sectionLink(page, 'Draw')).toHaveAttribute('aria-current', 'page');
 	});
 
 	test('a city is reachable by name whatever the accents and casing', async ({ page }) => {
@@ -230,7 +236,7 @@ test.describe('ATGreen smoke', () => {
 				const rail = document.querySelector('.rail')!.getBoundingClientRect();
 				const stage = document.querySelector('.stage')!.getBoundingClientRect();
 				const canvas = document.querySelector('canvas.mapboxgl-canvas')!.getBoundingClientRect();
-				const tabs = document.querySelector('.bx--tabs')!.getBoundingClientRect();
+				const tabs = document.querySelector('nav.sections')!.getBoundingClientRect();
 				return {
 					tabsBottom: tabs.bottom,
 					railTop: rail.top,
@@ -495,9 +501,9 @@ test.describe('ATGreen smoke', () => {
 
 		// Draw mounts two maps; leaving it must release both.
 		for (let i = 0; i < 2; i++) {
-			await page.getByRole('tab', { name: 'Draw' }).click();
+			await sectionLink(page, 'Draw').click();
 			await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 15000 });
-			await page.getByRole('tab', { name: 'Measure' }).click();
+			await sectionLink(page, 'Measure').click();
 			await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 15000 });
 		}
 

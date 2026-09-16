@@ -7,6 +7,7 @@
 	import { extent } from '../js/layers';
 	import { current_city } from '../stores/stores';
 	import ExploreMap from './maps/ExploreMap.svelte';
+	import RailSection from './RailSection.svelte';
 	import ToolPane from './ToolPane.svelte';
 
 	let green_types = [
@@ -57,6 +58,21 @@
 	);
 
 	$: lowerCaseValue = current_search_text_value.toLowerCase();
+
+	/*
+		Carbon's filterable MultiSelect shows the number of selected items in a tag
+		and nothing else — the control read as a bare "9" with no label anywhere
+		near it, because `titleText` is silently dropped for the filterable variant
+		and `Search` renders an empty label unless `labelText` is set. RailSection
+		supplies the heading; this says what the number counts.
+	*/
+	$: types_selected = green_types_selected_ids.length;
+	$: types_hint =
+		types_selected === 0
+			? 'Nothing selected — the map is empty'
+			: types_selected === green_types.length
+				? `All ${green_types.length} types`
+				: `${types_selected} of ${green_types.length} types`;
 
 	$: if (data && data.features && data.features.length > 0) {
 		results = [];
@@ -114,46 +130,54 @@
 <ToolPane>
 	<svelte:fragment slot="rail">
 		{#if data && data.features && data.features.length > 0}
-			<!--
-				Ten values is where a dropdown earns its keep, so this one stays a
-				MultiSelect — and unlike Create's it was already wired correctly.
-			-->
-			<MultiSelect
-				filterable
-				selectedIds={green_types_selected_ids}
-				spellcheck="false"
-				titleText="Green area types"
-				label="Select the types of green areas"
-				items={green_types}
-				on:select={(event) => {
-					green_types_selected_ids = event.detail.selectedIds;
-				}}
-			/>
+			<RailSection title="Green area types" hint={types_hint}>
+				<!--
+					Ten values is where a dropdown earns its keep, so this one stays a
+					MultiSelect — and unlike Create's it was already wired correctly.
+				-->
+				<MultiSelect
+					filterable
+					selectedIds={green_types_selected_ids}
+					spellcheck="false"
+					placeholder="Add or remove types"
+					items={green_types}
+					on:select={(event) => {
+						green_types_selected_ids = event.detail.selectedIds;
+					}}
+				/>
+			</RailSection>
 
-			<Slider
-				fullWidth
-				hideTextInput
-				step={1}
-				labelText="Minimum size — {current_minimum_size} ha"
-				min={Math.floor(minv)}
-				max={Math.floor(maxv)}
-				minLabel={String(Math.floor(minv))}
-				maxLabel={String(Math.floor(maxv))}
-				bind:value={current_minimum_size}
-			/>
+			<RailSection title="Minimum size">
+				<Slider
+					fullWidth
+					hideTextInput
+					step={1}
+					labelText="{current_minimum_size} ha and larger"
+					min={Math.floor(minv)}
+					max={Math.floor(maxv)}
+					minLabel={String(Math.floor(minv))}
+					maxLabel={String(Math.floor(maxv))}
+					bind:value={current_minimum_size}
+				/>
+			</RailSection>
 
-			<Search
-				bind:ref={search_ref}
-				bind:active
-				bind:value={current_search_text_value}
-				bind:selectedResultIndex
-				{results}
-				size="lg"
-				placeholder="Filter by name"
-				autocomplete="on"
-			/>
+			<RailSection title="Find a place">
+				<Search
+					bind:ref={search_ref}
+					bind:active
+					bind:value={current_search_text_value}
+					bind:selectedResultIndex
+					{results}
+					size="lg"
+					labelText="Filter green areas by name"
+					placeholder="Filter by name"
+					autocomplete="on"
+				/>
+			</RailSection>
 
-			<p class="count">{data.features.length.toLocaleString()} green areas</p>
+			<p class="count">
+				{data.features.length.toLocaleString()} green areas in {$current_city?.text ?? 'this city'}
+			</p>
 		{:else}
 			<p class="count">Loading green areas…</p>
 		{/if}
@@ -171,28 +195,8 @@
 
 <style>
 	.count {
-		color: var(--cds-text-05, #8d8d8d);
-		font-size: 0.82rem;
 		margin: 0;
-	}
-
-	div {
-		padding: 10px 0px;
-	}
-
-	div.blocks-container {
-		display: flex;
-		flex-direction: row;
-		flex-wrap: wrap;
-		flex-basis: auto;
-		align-items: end;
-	}
-	div.block {
-		flex-grow: 1;
-		padding: 10px 10px;
-	}
-
-	p {
-		margin-top: 10px;
+		font-size: 0.8125rem;
+		color: var(--cds-text-05, #8d8d8d);
 	}
 </style>

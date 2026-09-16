@@ -84,11 +84,10 @@
 
 	export let metadata;
 	/*
-		The legend lives in the rail now, not floating over the map, so it sizes
-		itself from its own container instead of the window. It used to take
-		`containerWidth` from a `<svelte:window bind:innerWidth>` in the parent and
-		compute a left offset to fake centring — which was already only correct
-		when the map happened to be full-width, and is simply wrong beside a rail.
+		Sizes itself from its own container rather than from the window. It used to
+		take `containerWidth` from a `<svelte:window bind:innerWidth>` in the parent
+		and compute a left offset to fake centring — only ever correct when the map
+		happened to be full-width. Centring is the box model's job now.
 	*/
 	let containerWidth: number = 0;
 
@@ -212,18 +211,34 @@
 {/if}
 
 <style>
+	/*
+		Centred over the map by the box model. No padding on this element: the svg
+		inside is sized from its clientWidth, so padding here would push the ramp
+		wider than the box that contains it. The svg carries its own 15px margins.
+	*/
 	div.legend-container {
+		position: absolute;
+		left: 1rem;
+		right: 1rem;
+		bottom: 1.5rem;
+		margin: 0 auto;
+		max-width: 25rem;
+		border-radius: 5px;
+		background-color: rgba(10, 10, 10, 0.78);
 		color: white;
 	}
 
 	figure {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.125rem;
 		margin: 0;
+		padding: 0.375rem 0 0.25rem;
 	}
 
 	.eyebrow {
+		/* Matches the svg's own left margin so caption and ramp share an edge. */
+		padding-inline: 15px;
 		font-size: 0.6875rem;
 		font-weight: 600;
 		letter-spacing: 0.08em;
