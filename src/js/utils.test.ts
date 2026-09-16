@@ -19,10 +19,23 @@ describe('get_green_types_code', () => {
 		expect(get_green_types_code(['grass'] as never)).toBe(6);
 	});
 
-	it('depends on the order of the input, not its contents', () => {
-		// 'parks,forests' is the same selection as 'forests,parks' but matches no case,
-		// so it silently falls through to 0 = all three types.
-		expect(get_green_types_code(['parks', 'forests'] as never)).toBe(0);
+	it('depends on the contents of the input, not its order', () => {
+		// This used to assert the bug: 'parks,forests' is the same selection as
+		// 'forests,parks' but matched no case, so it fell through to 0 — the code
+		// for all three types. `bind:group` yields checkbox order, so every partial
+		// selection in Draw and Create hit that path and queried the opposite of
+		// what the user had ticked.
+		expect(get_green_types_code(['parks', 'forests'] as never)).toBe(1);
+		expect(get_green_types_code(['parks', 'grass'] as never)).toBe(2);
+		expect(get_green_types_code(['grass', 'forests'] as never)).toBe(4);
+		expect(get_green_types_code(['parks', 'forests', 'grass'] as never)).toBe(0);
+	});
+
+	it('refuses a selection that is not a set of the three known types', () => {
+		// All seven non-empty subsets are enumerated, so anything else is a caller
+		// bug and must not silently become 0.
+		expect(get_green_types_code(['woods'] as never)).toBeUndefined();
+		expect(get_green_types_code(['parks', 'parks'] as never)).toBeUndefined();
 	});
 
 	it('returns undefined when given no list at all', () => {
