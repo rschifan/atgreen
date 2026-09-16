@@ -384,11 +384,25 @@ test.describe('ATGreen smoke', () => {
 			expect(pos, 'mapbox control container position').toBe('absolute');
 		});
 
-		test('the index tiles are reachable and operable by keyboard', async ({ page }) => {
+		test('the index rows are grouped, reachable and operable by keyboard', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
-			const tiles = page.locator('button.tile');
+			const tiles = page.locator('button.row');
 			await expect(tiles).toHaveCount(8, { timeout: 20000 });
+
+			// The eight indexes are three different kinds of measurement, not eight
+			// peers, and the grouping comes from AccessibilityIndexType rather than
+			// from a hand-kept list — so a new index gets a group without any change
+			// here. A flat panel invited comparing WHO's 75% with IPP's 100%, which
+			// are answers to different questions in different units.
+			await expect(page.locator('.group-head')).toHaveText([
+				'Distance to greenspace',
+				'Green per person',
+				'Exposure'
+			]);
+
+			// Every row states its own requirement, so no index is unexplained.
+			await expect(page.locator('.row .sub').first()).not.toBeEmpty();
 
 			// They were bare <div on:click> with an empty on:keypress, and they are
 			// the only way to change the index (WCAG 2.1.1).
@@ -452,7 +466,7 @@ test.describe('ATGreen smoke', () => {
 		test('Measure stays within its violation budget', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
-			await expect(page.locator('button.tile').first()).toBeVisible({ timeout: 20000 });
+			await expect(page.locator('button.row').first()).toBeVisible({ timeout: 20000 });
 
 			const { violations } = await scan(page);
 			expect(violations.length, `measure: ${describe_violations(violations)}`).toBeLessThanOrEqual(

@@ -62,31 +62,55 @@
 	`<nav>` of links with `aria-current="page"` is what this actually is — and the
 	styling below is ours rather than a fight with Carbon's.
 -->
-<nav class="sections" aria-label="Sections">
-	<a href={resolve('/')}>Search</a>
-	{#each SECTIONS as s (s)}
-		<a
-			href={resolve(ROUTES[s], { city: cityPath })}
-			aria-current={s === section ? 'page' : undefined}>{title(s)}</a
-		>
-	{/each}
-</nav>
+<div class="section-shell">
+	<nav class="sections" aria-label="Sections">
+		<a href={resolve('/')}>Search</a>
+		{#each SECTIONS as s (s)}
+			<a
+				href={resolve(ROUTES[s], { city: cityPath })}
+				aria-current={s === section ? 'page' : undefined}>{title(s)}</a
+			>
+		{/each}
+	</nav>
 
-{#if notFound}
-	<div class="notice">
-		<h1>No city called “{safeDecode(param)}”</h1>
-		<p>
-			It may have been renamed, or the link may be mistyped.
-			<a href={resolve('/')}>Pick a city from the globe</a>.
-		</p>
-	</div>
-{:else if resolving}
-	<div class="notice"><p>Loading cities…</p></div>
-{:else}
-	<slot />
-{/if}
+	{#if notFound}
+		<div class="notice">
+			<h1>No city called “{safeDecode(param)}”</h1>
+			<p>
+				It may have been renamed, or the link may be mistyped.
+				<a href={resolve('/')}>Pick a city from the globe</a>.
+			</p>
+		</div>
+	{:else if resolving}
+		<div class="notice"><p>Loading cities…</p></div>
+	{:else}
+		<slot />
+	{/if}
+</div>
 
 <style>
+	/*
+		A definite height for the section shell.
+
+		Nothing above this sets one: `main.bx--content` is 786px tall inside an
+		800px viewport (48px of header margin plus Carbon's own min-height), so the
+		document scrolled by 34px and, worse, `flex-grow` below had no fixed budget
+		to divide. The rail's `overflow-y: auto` therefore never engaged — a rail
+		taller than the window stretched the pane instead of scrolling, and the map
+		canvas was left at its old size while the stage grew under it.
+
+		Scoped to the city sections deliberately: /about and the landing page are
+		documents that should scroll, this is a fixed-viewport map UI that should
+		not.
+	*/
+	.section-shell {
+		flex: 1 1 auto;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		height: calc(100dvh - 3rem); /* 3rem is the Carbon header */
+	}
+
 	.sections {
 		display: flex;
 		align-items: stretch;

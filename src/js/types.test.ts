@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { AccessibilityIndexType, TargetStoreImpl, UnitType } from './types';
+import {
+	AccessibilityIndexType,
+	INDEX_GROUP_LABEL,
+	INDEX_GROUP_ORDER,
+	TargetStoreImpl,
+	UnitType,
+	describe_index_target
+} from './types';
 
 // Shaped exactly like the live /rpc/getindexes payload.
 const INDEXES = [
@@ -95,5 +102,52 @@ describe('TargetStoreImpl.createInstance', () => {
 		it('uses the reported distance for the others', () => {
 			expect(store.getTarget('IPP')?.index.distance).toBe(5);
 		});
+	});
+});
+
+describe('describe_index_target', () => {
+	// The real values from /rpc/getindexes, so these break if the RPC's shape moves.
+	const distance = {
+		threshold: 5,
+		index: { type: AccessibilityIndexType.MINIMUM_DISTANCE, size: 0.5, distance: -1 }
+	};
+	const perPerson = {
+		threshold: 9,
+		index: { type: AccessibilityIndexType.PER_PERSON, size: 0.5, distance: 30 }
+	};
+	const exposure = {
+		threshold: 0.5,
+		index: { type: AccessibilityIndexType.EXPOSURE, size: 0.01, distance: 5 }
+	};
+
+	it('states what each family of index requires', () => {
+		expect(describe_index_target(distance)).toBe('≥0.5 ha within 5 min');
+		expect(describe_index_target(perPerson)).toBe('9 m² per person within 30 min');
+		expect(describe_index_target(exposure)).toBe('0.5 ha within 5 min');
+	});
+
+	it('reads the threshold for distance and the distance for the others', () => {
+		// A distance index carries `distance: -1` from the RPC and its target IS the
+		// time budget; the other two carry a real distance and a target in their own
+		// unit. Getting these the wrong way round produces "-1 min" on screen.
+		expect(describe_index_target(distance)).not.toContain('-1');
+		expect(describe_index_target(perPerson)).toContain('30 min');
+		expect(describe_index_target(exposure)).toContain('5 min');
+	});
+
+	it('returns an empty string rather than throwing when the index is missing', () => {
+		expect(describe_index_target({ threshold: 5, index: undefined as never })).toBe('');
+	});
+});
+
+describe('INDEX_GROUP_ORDER', () => {
+	it('covers every index type exactly once and has a label for each', () => {
+		const types = [
+			AccessibilityIndexType.MINIMUM_DISTANCE,
+			AccessibilityIndexType.EXPOSURE,
+			AccessibilityIndexType.PER_PERSON
+		];
+		expect([...INDEX_GROUP_ORDER].sort()).toEqual([...types].sort());
+		for (const t of INDEX_GROUP_ORDER) expect(INDEX_GROUP_LABEL[t]).toBeTruthy();
 	});
 });
