@@ -6,7 +6,7 @@
 
 	import { apply_globe_style } from '../../js/globe_styles';
 	import { LABEL_FONT, maplibregl } from '../../js/map';
-	import { toCityPath } from '../../js/slug';
+	import { cityLabel, toCityPath } from '../../js/slug';
 	import { globe_style } from '../../stores/settings';
 
 	export let map: maplibregl.Map;
@@ -27,9 +27,6 @@
 	// Stops whatever the globe style keeps running (the pings animation).
 	let stop_style = () => {};
 
-	// Names come underscore-separated from the API ("Los_Angeles").
-	const display_name = (name: string) => String(name ?? '').replaceAll('_', ' ');
-
 	// setText, never setHTML: the name comes from the database.
 	const popup = new maplibregl.Popup({
 		closeButton: false,
@@ -46,11 +43,19 @@
 	}
 
 	onMount(() => {
+		// Each city also carries its name as it reads — "Newcastle upon Tyne",
+		// not the API's "Newcastle_upon_Tyne" — for the labels.
+		const cities: GeoJSON.FeatureCollection = data
+			? {
+					...data,
+					features: data.features.map((f) => ({
+						...f,
+						properties: { ...f.properties, label: cityLabel(f.properties?.name) }
+					}))
+				}
+			: empty_geojson;
 		if (!map.getSource(SUMMARY_SOURCE))
-			map.addSource(SUMMARY_SOURCE, {
-				type: 'geojson',
-				data: data ? data : empty_geojson
-			});
+			map.addSource(SUMMARY_SOURCE, { type: 'geojson', data: cities });
 
 		if (!map.getLayer(SUMMARY_HALO))
 			map.addLayer({
@@ -95,28 +100,33 @@
 			matchMedia('(prefers-reduced-motion: reduce)').matches
 		);
 
-		// Names appear once the view is close enough to read them — during the
-		// flight into a city, or when a user zooms in.
+		/*
+			Names appear once a user zooms in, and only as many as fit with room
+			around them: the largest cities are placed first (by grid size, the
+			one measure of size the city list carries), and the rest give way.
+			They fade in rather than pop.
+		*/
 		if (!map.getLayer(CITY_LABEL_LAYER))
 			map.addLayer({
 				id: CITY_LABEL_LAYER,
 				type: 'symbol',
 				source: SUMMARY_SOURCE,
-				minzoom: 3.5,
+				minzoom: 3.2,
 				layout: {
-					'text-field': ['get', 'name'],
+					'text-field': ['get', 'label'],
 					'text-font': LABEL_FONT,
 					'text-justify': 'auto',
 					'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
-					'text-radial-offset': 0.6,
-					// Was a legacy `{ base, stops }` zoom function, deprecated in the style
-					// spec and rejected by MapLibre's types; this is the same curve.
-					'text-size': ['interpolate', ['exponential', 1.75], ['zoom'], 2, 12, 10, 20, 20, 30]
+					'text-radial-offset': 0.7,
+					'text-size': ['interpolate', ['linear'], ['zoom'], 3.2, 11, 6, 13],
+					'text-padding': 8,
+					'symbol-sort-key': ['-', ['to-number', ['get', 'nrows'], 0]]
 				},
 				paint: {
+					'text-color': '#d8e2dc',
+					'text-halo-color': 'rgba(6, 10, 16, 0.9)',
 					'text-halo-width': 1.2,
-					'text-halo-color': 'rgba(0, 0, 0, 0.85)',
-					'text-color': '#f4f4f4'
+					'text-opacity': ['interpolate', ['linear'], ['zoom'], 3.2, 0, 3.7, 1]
 				}
 			});
 
@@ -149,7 +159,7 @@
 			if (feature.geometry.type === 'Point')
 				popup
 					.setLngLat(feature.geometry.coordinates as [number, number])
-					.setText(display_name(feature.properties?.name))
+					.setText(cityLabel(feature.properties?.name))
 					.addTo(map);
 		});
 

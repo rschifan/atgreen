@@ -34,6 +34,31 @@ export function safeDecode(value: string): string {
 	}
 }
 
+/**
+ * A city's name as people read it. The API's names double as ids and use
+ * underscores for spaces ("Newcastle_upon_Tyne"); every place a name is shown
+ * goes through this, while URLs and API calls keep the name as it is.
+ */
+export function cityLabel(name: string): string {
+	return String(name ?? '').replaceAll('_', ' ');
+}
+
+/**
+ * Whether a city is what someone is typing in the search. Case, accents,
+ * punctuation and spaces-vs-underscores do not matter — "sao paulo" finds
+ * "São_Paulo", "new york" finds "New_York" — and a name in a non-Latin script
+ * still matches when typed in that script.
+ */
+export function cityMatches(name: string, query: string): boolean {
+	const q = String(query ?? '')
+		.trim()
+		.toLowerCase();
+	if (!q) return false;
+	if (cityLabel(name).toLowerCase().includes(q.replaceAll('_', ' '))) return true;
+	const slug = toSlug(q);
+	return slug !== '' && toSlug(name).includes(slug);
+}
+
 /** The path segment for a city. Percent-encoded; browsers show it decoded. */
 export function toCityPath(name: string): string {
 	return encodeURIComponent(String(name ?? ''));

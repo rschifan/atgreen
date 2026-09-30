@@ -48,6 +48,9 @@
 		/>
 	</div>
 
+	<!-- Keeps the text readable when a zoomed-in globe and its labels run under it. -->
+	<div class="scrim" style:height="{clear_top + 64}px" aria-hidden="true"></div>
+
 	<div class="hero" bind:this={hero} bind:clientHeight={hero_height}>
 		<h1>
 			How
@@ -125,6 +128,19 @@
 		inset: 0;
 	}
 
+	.scrim {
+		position: absolute;
+		z-index: 1;
+		inset: 0 0 auto;
+		pointer-events: none;
+		background: linear-gradient(
+			to bottom,
+			rgba(6, 10, 16, 0.92) 0%,
+			rgba(6, 10, 16, 0.85) 70%,
+			rgba(6, 10, 16, 0) 100%
+		);
+	}
+
 	/* One centred column at every size: the question, then the globe below it. */
 	.hero {
 		position: absolute;
@@ -194,7 +210,11 @@
 		max-width: calc(100% - 26rem);
 		font-size: 0.75rem;
 		line-height: 1.4;
-		color: #8d8d8d;
+		color: #a8a8a8;
+		/* Readable over the bright desert of the relief styles, too. */
+		text-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.9),
+			0 0 8px rgba(0, 0, 0, 0.6);
 	}
 	.sources a {
 		color: #c6c6c6;

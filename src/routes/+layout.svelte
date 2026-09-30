@@ -22,7 +22,7 @@
 	import { resolve } from '$app/paths';
 	import { useRequest } from 'alova';
 	import { get_cities_metadata } from '../js/api';
-	import { toCityPath } from '../js/slug';
+	import { cityLabel, cityMatches, toCityPath } from '../js/slug';
 	import { cities, current_city, loading, search_active } from '../stores/stores.js';
 
 	const SECTIONS = ['measure', 'compare', 'create', 'draw', 'explore'] as const;
@@ -58,13 +58,13 @@
 	$: results =
 		query.length > 0
 			? features
-					.filter((f) => f.properties.name.toLowerCase().includes(query.toLowerCase()))
+					.filter((f) => cityMatches(f.properties.name, query))
 					.map((f) => ({
 						// Carbon calls preventDefault on the click and dispatches `select`
 						// instead, so this href is not what navigates — but it makes each
 						// result a real link for middle-click and copy-link-address.
 						href: resolve(ROUTES[section], { city: toCityPath(f.properties.name) }),
-						text: f.properties.name,
+						text: cityLabel(f.properties.name),
 						feature: f
 					}))
 			: [];
@@ -85,7 +85,7 @@
 	persistentHamburgerMenu={false}
 	href={resolve('/')}
 	companyName="ATGreen"
-	platformName={$current_city?.text}
+	platformName={$current_city ? cityLabel($current_city.text) : undefined}
 	bind:isSideNavOpen
 >
 	<svelte:fragment slot="skipToContent">

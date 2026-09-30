@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { findCityByParam, findSlugCollisions, safeDecode, toCityPath, toSlug } from './slug';
+import {
+	cityLabel,
+	cityMatches,
+	findCityByParam,
+	findSlugCollisions,
+	safeDecode,
+	toCityPath,
+	toSlug
+} from './slug';
 
 const feature = (name: string) => ({ properties: { name } });
 
@@ -122,5 +130,34 @@ describe('findSlugCollisions', () => {
 
 	it('does not report the same city listed twice', () => {
 		expect(findSlugCollisions([feature('Turin'), feature('Turin')])).toEqual({});
+	});
+});
+
+describe('cityLabel', () => {
+	it('shows underscores as spaces, and leaves everything else alone', () => {
+		expect(cityLabel('Newcastle_upon_Tyne')).toBe('Newcastle upon Tyne');
+		expect(cityLabel('Bolzano_-_Bozen')).toBe('Bolzano - Bozen');
+		expect(cityLabel('Turin')).toBe('Turin');
+		expect(cityLabel('بوكان')).toBe('بوكان');
+	});
+});
+
+describe('cityMatches', () => {
+	it('ignores case, accents and spaces-vs-underscores', () => {
+		expect(cityMatches('New_York', 'new york')).toBe(true);
+		expect(cityMatches('São_Paulo', 'sao paulo')).toBe(true);
+		expect(cityMatches('São_Paulo', 'São Paulo')).toBe(true);
+		expect(cityMatches('Łódź', 'lodz')).toBe(true);
+		expect(cityMatches('Turin', 'TUR')).toBe(true);
+	});
+
+	it('matches a non-Latin name in its own script', () => {
+		expect(cityMatches('بوكان', 'بوك')).toBe(true);
+	});
+
+	it('does not match an empty query or a different city', () => {
+		expect(cityMatches('Turin', '')).toBe(false);
+		expect(cityMatches('Turin', '   ')).toBe(false);
+		expect(cityMatches('Turin', 'milan')).toBe(false);
 	});
 });
