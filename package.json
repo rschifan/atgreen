@@ -22,12 +22,14 @@
 		"@axe-core/playwright": "^4.13.0",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.28.1",
+		"@protomaps/basemaps": "^5.7.2",
 		"@sveltejs/adapter-node": "^5.0.0",
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@turf/bbox": "^6.5.0",
 		"@turf/centroid": "^6.5.0",
 		"@types/d3": "^7.4.0",
+		"@types/geojson": "^7946.0.16",
 		"@typescript-eslint/eslint-plugin": "^8.70.1",
 		"@typescript-eslint/parser": "^8.70.1",
 		"alova": "^2.8.1",
@@ -40,7 +42,6 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.0.0",
 		"globals": "^17.12.0",
-		"mapbox-gl": "^2.15.0",
 		"postcss": "^8.4.24",
 		"prettier": "^3.9.9",
 		"prettier-plugin-svelte": "^4.1.1",
@@ -55,6 +56,8 @@
 	"type": "module",
 	"dependencies": {
 		"@turf/union": "^6.5.0",
+		"maplibre-gl": "^6.11.2",
+		"pmtiles": "^4.5.0",
 		"simple-statistics": "^7.8.3"
 	},
 	"overrides": {

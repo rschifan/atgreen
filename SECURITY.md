@@ -28,8 +28,10 @@ to test something actively, get in touch first.
 
 ## Out of scope
 
-- The Mapbox access token in `src/js/mapbox.js` is a **public** (`pk.`) token, exposed by
-  design in any client-side Mapbox application. It is not a secret.
+- There is no map API key. The basemap is a self-hosted Protomaps build served from this
+  site's own origin (see `docs/BASEMAP.md`), and MapLibre GL JS needs no token. The Mapbox
+  token this app used to embed should be **revoked** in the Mapbox account once the
+  migration is deployed — it was public by design, but it was also unrestricted.
 - Findings that require a compromised end-user device or browser.
 
 ## Dependency overrides

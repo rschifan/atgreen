@@ -20,7 +20,7 @@ describe('extent', () => {
 	});
 
 	it('falls back to a well-formed range for empty input', () => {
-		// Infinity in a Mapbox expression is a broken layer, not an empty one.
+		// Infinity in a MapLibre expression is a broken layer, not an empty one.
 		expect(extent([])).toEqual({ min: 0, max: 1 });
 	});
 
@@ -84,7 +84,7 @@ describe('get_colormap_rule', () => {
 	});
 
 	// A target every cell already meets, or none does, is a real situation — not an
-	// edge case. Mapbox throws on non-ascending interpolate stops and the layer
+	// edge case. MapLibre throws on non-ascending interpolate stops and the layer
 	// never paints.
 	it('stays ascending when every value beats the target', () => {
 		const rule = get_colormap_rule(
@@ -142,7 +142,7 @@ describe('build_greenareas_filter', () => {
 		// production — slider at "576 ha and larger" plus a type change brought
 		// every small area back.
 		const filter = build_greenareas_filter([1, 2], 10, ['Parco Valentino']);
-		expect(filter?.[0]).toBe('all');
+		expect((filter as unknown[] | null)?.[0]).toBe('all');
 		expect(filter).toHaveLength(4);
 		expect(filter).toContainEqual(['in', ['get', 'osm_value'], ['literal', [1, 2]]]);
 		expect(filter).toContainEqual(['>=', ['get', 'size'], 10]);

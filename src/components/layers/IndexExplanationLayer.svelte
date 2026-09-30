@@ -1,9 +1,10 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { Exit } from 'carbon-icons-svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR, TEXT_MAP_COLOR } from '../../js/colors';
-	import { mapbox } from '../../js/mapbox';
+	import { LABEL_FONT, maplibregl } from '../../js/map';
 	import { AccessibilityIndexType } from '../../js/types';
 	import { adjust_zoom } from '../../js/utils';
 	import {
@@ -14,10 +15,10 @@
 	} from '../../stores/stores';
 	import ButtonMap from '../maps/ButtonMap.svelte';
 
-	const empty_geojson = { type: 'FeatureCollection', features: [] };
+	const empty_geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 	export let metadata;
-	export let map: mapbox.Map;
+	export let map: maplibregl.Map;
 
 	let PGAS_SOURCE = 'PGAS_SOURCE';
 	let PGAS_LAYER = 'PGAS_LAYER';
@@ -84,6 +85,7 @@
 				source: PGAS_SOURCE,
 				layout: {
 					'text-field': ['get', 'osm_name'],
+					'text-font': LABEL_FONT,
 					'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
 					'text-justify': 'auto',
 					'text-size': 10
@@ -170,7 +172,7 @@
 				if (!data.ok) throw new Error(`explanation request failed: HTTP ${data.status}`);
 				const features = await data.json();
 				if (features && features.features && features.features.length > 0) {
-					map.getSource(PGAS_SOURCE)?.setData(features);
+					map.getSource<maplibregl.GeoJSONSource>(PGAS_SOURCE)?.setData(features);
 					adjust_zoom(features, map);
 				}
 			}
@@ -186,7 +188,8 @@
 
 	function back() {
 		current_cell.set({ x: -1, y: -1 });
-		if (map.getSource(PGAS_SOURCE)) map.getSource(PGAS_SOURCE).setData(empty_geojson);
+		if (map.getSource(PGAS_SOURCE))
+			map.getSource<maplibregl.GeoJSONSource>(PGAS_SOURCE)?.setData(empty_geojson);
 	}
 </script>
 

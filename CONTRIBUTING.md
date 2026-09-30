@@ -33,7 +33,7 @@ CI runs exactly these.
 - **The ratchet may not rise.** `scripts/quality-ratchet.mjs` compares `svelte-check` and
   ESLint counts against `.quality-baseline.json`. Your change may not add errors. If you fix
   some, lower the baseline with `node scripts/quality-ratchet.mjs --update` and commit it.
-- **The end-to-end suite is hermetic.** It stubs the API and Mapbox from fixtures in
+- **The end-to-end suite is hermetic.** It stubs the API and the basemap style from fixtures in
   `tests/fixtures/`. Please keep it that way: tests must not depend on the production server
   being up, and must not put load on it.
 - **New logic gets a test.** Anything non-trivial — a branch, a parser, a calculation —

@@ -1,14 +1,14 @@
 <!-- newgreen_mindis_osm, newgreen_exposure_esa,   newgreen_per_person_osm -->
 
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
+	import { LABEL_FONT } from '../js/map.js';
 	import { format } from 'd3';
 	import ToolPane from './ToolPane.svelte';
-	// Type-only, and from our own module. This was a VALUE import of a named
-	// export that mapbox-gl (CommonJS) does not have — `mapbox` is its default.
-	// Rolldown dropped it as unused so the production bundle was fine, which is
-	// why it went unnoticed; `vite dev` evaluates it for real and every map route
-	// answered 500. Every other component already imports from js/mapbox.
-	import type { mapbox } from '../js/mapbox';
+	// Type-only. MapLibre ships its own type definitions, so type positions import
+	// straight from the package; value imports go through js/map, which registers
+	// the worker and the pmtiles protocol before any map is built.
+	import type * as maplibregl from 'maplibre-gl';
 	import {
 		Button,
 		Checkbox,
@@ -76,10 +76,10 @@
 
 	let current_target: number;
 
-	let reference_data: object;
-	let reference_map: mapbox.Map;
-	let new_data: object;
-	let new_map: mapbox.Map;
+	let reference_data: CellCollection;
+	let reference_map: maplibregl.Map;
+	let new_data: CellCollection;
+	let new_map: maplibregl.Map;
 
 	let create_button_disabled: boolean;
 
@@ -95,15 +95,16 @@
 
 	const empty_geojson = create_empty_geojson();
 
-	interface Feature {
-		type: string;
-		geometry: object;
-		properties: object;
-	}
-	interface GeoJSON {
-		type: string;
-		features: Feature[];
-	}
+	/*
+		The accessibility grid as MapLibre receives it: GeoJSON whose features carry
+		a cell `id` and a value `v`. These were hand-rolled interfaces NAMED
+		`GeoJSON` and `Feature`, which shadowed the real GeoJSON types for this
+		whole file — so nothing here could be checked against what MapLibre
+		actually accepts.
+	*/
+	type CellProperties = { id: number; v: number };
+	type CellFeature = GeoJSON.Feature<GeoJSON.Geometry, CellProperties>;
+	type CellCollection = GeoJSON.FeatureCollection<GeoJSON.Geometry, CellProperties>;
 
 	$: create_button_disabled =
 		$current_city && $current_city.text && newMapLoaded && referenceMapLoaded;
@@ -117,8 +118,8 @@
 		this was doing the same work from further away.
 	*/
 
-	function accessibility_diffmap(geojson1: GeoJSON, geojson2: GeoJSON) {
-		const features: Feature[] = [];
+	function accessibility_diffmap(geojson1: CellCollection, geojson2: CellCollection) {
+		const features: CellFeature[] = [];
 
 		const A = geojson1.features.sort((a, b) => b.properties.id - a.properties.id);
 		const B = geojson2.features.sort((a, b) => b.properties.id - a.properties.id);
@@ -173,39 +174,39 @@
 		return create_geojson(features);
 	}
 
-	function union_geojson(geojson: GeoJSON) {
-		let mergedGeometry: object | null = null;
+	function union_geojson(geojson: CellCollection): GeoJSON.Feature | GeoJSON.FeatureCollection {
+		type Area = GeoJSON.Polygon | GeoJSON.MultiPolygon;
+		let merged: Area | null = null;
 
-		geojson.features.forEach((feature) => {
-			if (mergedGeometry === null) {
-				mergedGeometry = feature.geometry;
-			} else {
-				mergedGeometry = union(mergedGeometry, feature.geometry).geometry;
-			}
-		});
+		// for…of rather than forEach, so the type checker can follow `merged`.
+		for (const feature of geojson.features) {
+			const area = feature.geometry as Area;
+			// turf returns null when a union degenerates; keep what we had rather
+			// than dereferencing it, which is what `.geometry` on null used to do.
+			merged = merged === null ? area : (union(merged, area)?.geometry ?? merged);
+		}
 
-		return {
-			type: 'Feature',
-			geometry: mergedGeometry,
-			properties: {} // You can add properties as needed
-		};
+		// Nothing to merge: an empty collection, not a Feature with a null
+		// geometry — that looks like GeoJSON but MapLibre will not accept it.
+		if (merged === null) return create_empty_geojson();
+		return { type: 'Feature', geometry: merged, properties: {} };
 	}
 
-	function add_diff_layer(data: object, map: mapbox.Map, labels = false) {
+	function add_diff_layer(data: CellCollection, map: maplibregl.Map, labels = false) {
 		if (!map.getSource(DIFF_SOURCE))
 			map.addSource(DIFF_SOURCE, {
 				type: 'geojson',
 				data: data,
 				generateId: true
 			});
-		else map.getSource(DIFF_SOURCE).setData(data);
+		else map.getSource<maplibregl.GeoJSONSource>(DIFF_SOURCE)?.setData(data);
 		if (!map.getSource('source'))
 			map.addSource('source', {
 				type: 'geojson',
 				data: union_geojson(data),
 				generateId: true
 			});
-		else map.getSource('source').setData(union_geojson(data));
+		else map.getSource<maplibregl.GeoJSONSource>('source')?.setData(union_geojson(data));
 		if (!map.getLayer(DIFF_LAYER))
 			map.addLayer(
 				{
@@ -228,7 +229,9 @@
 						'text-field': ['get', 'v'],
 						'text-size': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 11, 15, 20],
 						'text-anchor': 'center',
-						'text-font': ['Arial Unicode MS Bold']
+						// Was 'Arial Unicode MS Bold': a Mapbox-hosted glyph name that no
+						// open font server provides, so these labels would render blank.
+						'text-font': LABEL_FONT
 					},
 					paint: { 'text-color': 'white', 'text-halo-color': 'black', 'text-halo-width': 1 }
 				});
@@ -242,7 +245,7 @@
 	const DIFF_LAYER = 'DIFF_LAYER';
 	const DIFF_TEXT_LAYER = 'DIFF_TEXT_LAYER';
 
-	function update_colormap(accessibility_values: number[], map: mapbox.Map, layer: mapbox.Layer) {
+	function update_colormap(accessibility_values: number[], map: maplibregl.Map, layer: string) {
 		if (map && map.getLayer(layer)) {
 			// One table, shared with Create and with the onMount switch that used to
 			// sit below — which disagreed with this one on two of three values.
@@ -263,19 +266,19 @@
 		}
 	}
 
-	function update_opacity(map: mapbox.Map, layer: mapbox.Layer) {
+	function update_opacity(map: maplibregl.Map, layer: string) {
 		if (map && map.getLayer(layer))
 			map.setPaintProperty(layer, 'fill-opacity', get_accessibility_layer_fill_opacity());
 	}
 
-	function add_selected_cell_layer(data: object, map: mapbox.Map) {
+	function add_selected_cell_layer(data: GeoJSON.GeoJSON, map: maplibregl.Map) {
 		if (!map.getSource(SELECTED_CELL_SOURCE))
 			map.addSource(SELECTED_CELL_SOURCE, {
 				type: 'geojson',
 				data: data,
 				generateId: true
 			});
-		else map.getSource(SELECTED_CELL_SOURCE).setData(data);
+		else map.getSource<maplibregl.GeoJSONSource>(SELECTED_CELL_SOURCE)?.setData(data);
 
 		if (!map.getLayer(SELECTED_CELL_LAYER)) {
 			map.addLayer({
@@ -290,7 +293,7 @@
 		}
 	}
 
-	function add_accessibility_layer(data: object, map: mapbox.Map) {
+	function add_accessibility_layer(data: CellCollection, map: maplibregl.Map) {
 		if (data && map) {
 			if (!map.getSource(ACCESSIBILITY_SOURCE))
 				map.addSource(ACCESSIBILITY_SOURCE, {
@@ -298,7 +301,7 @@
 					data: data,
 					generateId: true
 				});
-			else map.getSource(ACCESSIBILITY_SOURCE).setData(data);
+			else map.getSource<maplibregl.GeoJSONSource>(ACCESSIBILITY_SOURCE)?.setData(data);
 
 			if (!map.getLayer(ACCESSIBILITY_LAYER)) {
 				map.addLayer({
@@ -360,7 +363,7 @@
 		});
 	});
 
-	function remove_layers(map: mapbox.Map) {
+	function remove_layers(map: maplibregl.Map) {
 		if (map?.getLayer(DIFF_LAYER)) map.removeLayer(DIFF_LAYER);
 		if (map?.getLayer(DIFF_TEXT_LAYER)) map.removeLayer(DIFF_TEXT_LAYER);
 		if (map?.getSource(DIFF_SOURCE)) map.removeSource(DIFF_SOURCE);

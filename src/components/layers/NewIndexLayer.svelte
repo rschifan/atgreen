@@ -8,11 +8,11 @@
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../../js/layers';
-	import { mapbox } from '../../js/mapbox';
+	import { maplibregl } from '../../js/map';
 	import ButtonMap from '../maps/ButtonMap.svelte';
 
 	export let data;
-	export let map: mapbox.Map;
+	export let map: maplibregl.Map;
 	export let index_type: number;
 	export let threshold: number;
 	export let unit: string;
@@ -26,9 +26,9 @@
 	const NEW_INDEX_LAYER = 'NEW_INDEX_LAYER';
 
 	let visibilityToggle = true;
-	let hovered_accessibility_cell_id = 0;
+	let hovered_accessibility_cell_id: string | number | undefined = 0;
 
-	const popup = new mapbox.Popup({
+	const popup = new maplibregl.Popup({
 		closeButton: false,
 		closeOnClick: false
 	});
@@ -77,7 +77,7 @@
 	}
 
 	function update_datasource() {
-		let source = map.getSource(NEW_INDEX_SOURCE);
+		let source = map?.getSource<maplibregl.GeoJSONSource>(NEW_INDEX_SOURCE);
 		if (source) {
 			source.setData(data);
 		}
@@ -105,7 +105,7 @@
 			});
 		}
 
-		map.on('mouseenter', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
+		map.on('mouseenter', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 			if (!e.features || e.features.length <= 0) return;
 
 			let current_feature = e.features[0];
@@ -126,7 +126,7 @@
 			hovered_accessibility_cell_id = cell_id;
 		});
 
-		map.on('mouseleave', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
+		map.on('mouseleave', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 			map.getCanvas().style.cursor = '';
 
 			popup.remove();
@@ -139,7 +139,7 @@
 			hovered_accessibility_cell_id = 0;
 		});
 
-		map.on('mousemove', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
+		map.on('mousemove', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 			if (!e.features || e.features.length <= 0) return;
 
 			let current_feature = e.features[0];

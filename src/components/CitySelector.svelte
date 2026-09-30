@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { mapbox } from '../js/mapbox';
+	import type * as maplibregl from 'maplibre-gl';
 	import { Button, Modal, TooltipDefinition } from 'carbon-components-svelte';
 	import Building from 'carbon-icons-svelte/lib/Building.svelte';
 	import Help from 'carbon-icons-svelte/lib/Help.svelte';
@@ -12,7 +12,7 @@
 	export let active: boolean;
 	export let data: object;
 
-	let map: mapbox.Map;
+	let map: maplibregl.Map;
 	let mapLoaded = false;
 	let styleLoaded = false;
 	let open = false;

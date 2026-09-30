@@ -3,10 +3,10 @@
 	import { onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 
-	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
+	import { get_default_map_props, key, maplibregl } from '../../js/map.js';
 	import { current_city } from '../../stores/stores.js';
 
-	let map: mapbox.Map;
+	let map: maplibregl.Map;
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
@@ -30,7 +30,7 @@
 	});
 
 	function init() {
-		map = new mapbox.Map(
+		map = new maplibregl.Map(
 			get_default_map_props(container, $current_city.feature.geometry.coordinates)
 		);
 

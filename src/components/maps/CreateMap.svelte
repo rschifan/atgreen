@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import centroid from '@turf/centroid';
 	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
 	import { format } from 'd3';
@@ -8,20 +9,20 @@
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../../js/layers.js';
-	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
+	import { get_default_map_props, key, maplibregl } from '../../js/map.js';
 	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types.js';
 	import { adjust_zoom, refit_zoom } from '../../js/utils.js';
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
 
-	let map: mapbox.Map;
+	let map: maplibregl.Map;
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
 	let height: number;
 	export let container: string;
 	export let ref: object;
-	export let data: object;
+	export let data: GeoJSON.FeatureCollection;
 	export let index_type: number;
 	export let threshold: number;
 	export let unit: string;
@@ -33,9 +34,9 @@
 	const NEW_INDEX_SOURCE = 'NEW_INDEX_SOURCE';
 	const NEW_INDEX_LAYER = 'NEW_INDEX_LAYER';
 	let visibilityToggle = true;
-	let hovered_accessibility_cell_id = 0;
+	let hovered_accessibility_cell_id: string | number | undefined = 0;
 
-	const popup = new mapbox.Popup({
+	const popup = new maplibregl.Popup({
 		closeButton: false,
 		closeOnClick: false
 	});
@@ -82,7 +83,7 @@
 			map.setPaintProperty(NEW_INDEX_LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
 	}
 	function update_datasource() {
-		let source = map.getSource(NEW_INDEX_SOURCE);
+		let source = map?.getSource<maplibregl.GeoJSONSource>(NEW_INDEX_SOURCE);
 		if (source) {
 			source.setData(data);
 		}
@@ -114,7 +115,7 @@
 	});
 
 	function init() {
-		map = new mapbox.Map(
+		map = new maplibregl.Map(
 			get_default_map_props(container, $current_city.feature.geometry.coordinates)
 		);
 
@@ -156,7 +157,7 @@
 				map.setLayoutProperty(NEW_INDEX_LAYER, 'visibility', 'visible');
 			}
 
-			map.on('mouseenter', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
+			map.on('mouseenter', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 				if (!e.features || e.features.length <= 0) return;
 
 				let current_feature = e.features[0];
@@ -190,7 +191,7 @@
 				hovered_accessibility_cell_id = 0;
 			});
 
-			map.on('mousemove', NEW_INDEX_LAYER, (e: mapbox.MapMouseEvent) => {
+			map.on('mousemove', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 				if (!e.features || e.features.length <= 0) return;
 
 				let current_feature = e.features[0];

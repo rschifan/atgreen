@@ -1,12 +1,12 @@
 import bbox from '@turf/bbox';
-import type { mapbox } from './mapbox';
+import type * as maplibregl from 'maplibre-gl';
 
 /**
  * The bounds each map was last fitted to, so a container resize can re-apply
  * them. A WeakMap keyed on the map instance means a torn-down map takes its
  * entry with it.
  */
-const LAST_FIT = new WeakMap<mapbox.Map, [number, number, number, number]>();
+const LAST_FIT = new WeakMap<maplibregl.Map, [number, number, number, number]>();
 
 /**
  * Padding scaled to the viewport rather than a flat 100px.
@@ -16,12 +16,12 @@ const LAST_FIT = new WeakMap<mapbox.Map, [number, number, number, number]>();
  * A twelfth of the smaller dimension keeps the framing constant at any size,
  * and is floored so a very small map still gets breathing room.
  */
-function fit_padding(map: mapbox.Map) {
+function fit_padding(map: maplibregl.Map) {
 	const c = map.getCanvas();
 	return Math.max(24, Math.round(Math.min(c.clientWidth, c.clientHeight) / 12));
 }
 
-function fit(map: mapbox.Map, bb: [number, number, number, number], animate: boolean) {
+function fit(map: maplibregl.Map, bb: [number, number, number, number], animate: boolean) {
 	const padding = fit_padding(map);
 	map.fitBounds(bb, {
 		maxZoom: 14,
@@ -32,7 +32,7 @@ function fit(map: mapbox.Map, bb: [number, number, number, number], animate: boo
 	});
 }
 
-export function adjust_zoom(data: any, map: mapbox.Map, animate = false) {
+export function adjust_zoom(data: any, map: maplibregl.Map, animate = false) {
 	if (!map) return;
 	try {
 		if (data && data.features && data.features.length > 0) {
@@ -56,7 +56,7 @@ export function adjust_zoom(data: any, map: mapbox.Map, animate = false) {
  * before the window was dragged wider — stayed, and the data sat small in a
  * large map. Nothing re-fitted on resize before this.
  */
-export function refit_zoom(map: mapbox.Map) {
+export function refit_zoom(map: maplibregl.Map) {
 	const bb = map && LAST_FIT.get(map);
 	if (bb) {
 		try {
@@ -107,11 +107,11 @@ export function get_green_types_code(green_types: []) {
 	return undefined;
 }
 
-export function create_empty_geojson() {
+export function create_empty_geojson(): GeoJSON.FeatureCollection {
 	return { type: 'FeatureCollection', features: [] };
 }
 
-export function create_geojson(features: []) {
+export function create_geojson(features: GeoJSON.Feature[]): GeoJSON.FeatureCollection {
 	return { type: 'FeatureCollection', features: features };
 }
 
@@ -135,7 +135,7 @@ export function escape_html(value: unknown): string {
  *     html`<span>${feature.properties.osm_name}</span>`
  *
  * Svelte escapes `{...}` in templates, but these popups are hand-built strings
- * handed to Mapbox's `setHTML`, which assigns straight to `innerHTML` — so they
+ * handed to MapLibre's `setHTML`, which assigns straight to `innerHTML` — so they
  * sit outside that protection. `osm_name` is OpenStreetMap free text: anyone with
  * an account can rename a park, and the enforced CSP carries `script-src
  * 'unsafe-inline'`, so an injected handler would run.

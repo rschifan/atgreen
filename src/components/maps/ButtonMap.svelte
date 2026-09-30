@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { Button } from 'carbon-components-svelte';
-	import type { mapbox } from '../../js/mapbox';
+	import type * as maplibregl from 'maplibre-gl';
 
 	let button: MapControl;
 	let container: HTMLDivElement;
 
-	export let map: mapbox.Map;
+	export let map: maplibregl.Map;
 	export let icon;
 	export let title: string;
 	export let action = () => {};
@@ -36,9 +36,9 @@
 	});
 </script>
 
-<!-- <div bind:this={container} class="mapboxgl-ctrl-group mapboxgl-ctrl"> -->
-<div bind:this={container} class="mapboxgl-ctrl">
-	<!-- <button class="mapboxgl-ctrl-icon" on:click={action} {title}>
+<!-- <div bind:this={container} class="maplibregl-ctrl-group maplibregl-ctrl"> -->
+<div bind:this={container} class="maplibregl-ctrl">
+	<!-- <button class="maplibregl-ctrl-icon" on:click={action} {title}>
 		<slot />
 	</button> -->
 

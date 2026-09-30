@@ -1,11 +1,12 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
 	import { format } from 'd3';
 	import { afterUpdate, onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR } from '../../js/colors';
 	import { build_greenareas_filter } from '../../js/layers';
-	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
+	import { LABEL_FONT, get_default_map_props, key, maplibregl } from '../../js/map.js';
 	import { adjust_zoom, create_empty_geojson, refit_zoom, html } from '../../js/utils';
 	import { current_city } from '../../stores/stores.js';
 	import ButtonMap from './ButtonMap.svelte';
@@ -15,7 +16,7 @@
 	let height: number;
 	export let container: string;
 	export let ref: object;
-	export let data: object;
+	export let data: GeoJSON.FeatureCollection;
 	export let green_types: [];
 	export let minimum_size: number;
 	export let selected_green_areas: [];
@@ -41,10 +42,10 @@
 		9: 'forest'
 	};
 	let visibilityToggle = true;
-	let hovered_accessibility_cell_id = 0;
-	let map: mapbox.Map;
+	let hovered_accessibility_cell_id: string | number | undefined = 0;
+	let map: maplibregl.Map;
 
-	const popup = new mapbox.Popup({
+	const popup = new maplibregl.Popup({
 		closeButton: false,
 		closeOnClick: false
 	});
@@ -60,7 +61,7 @@
 	}
 
 	$: if (data && data.features && data.features.length > 0) {
-		const green_areas_source = map?.getSource(GREENAREAS_SOURCE);
+		const green_areas_source = map?.getSource<maplibregl.GeoJSONSource>(GREENAREAS_SOURCE);
 		if (green_areas_source) {
 			green_areas_source.setData(data);
 			adjust_zoom(data, map);
@@ -79,7 +80,7 @@
 	$: apply_filter(map, green_types, minimum_size, selected_green_areas);
 
 	function apply_filter(
-		target: mapbox.Map | undefined,
+		target: maplibregl.Map | undefined,
 		types: number[] | undefined,
 		min_size: number | undefined,
 		names: string[] | undefined
@@ -109,7 +110,7 @@
 	});
 
 	function init() {
-		map = new mapbox.Map(
+		map = new maplibregl.Map(
 			get_default_map_props(container, $current_city.feature.geometry.coordinates)
 		);
 		ref = map;
@@ -123,7 +124,7 @@
 					data: data ? data : create_empty_geojson(),
 					generateId: true
 				});
-			else map.getSource(GREENAREAS_SOURCE).setData(data);
+			else map.getSource<maplibregl.GeoJSONSource>(GREENAREAS_SOURCE)?.setData(data);
 
 			if (!map.getLayer(GREENAREAS_LAYER))
 				map.addLayer({
@@ -142,13 +143,10 @@
 					source: GREENAREAS_SOURCE,
 					layout: {
 						'text-field': ['get', 'osm_name'],
+						'text-font': LABEL_FONT,
 						'text-justify': 'auto',
-						'text-size': {
-							stops: [
-								[0, 10],
-								[22, 14]
-							]
-						}
+						// Was a legacy `{ stops }` zoom function; same line, as an expression.
+						'text-size': ['interpolate', ['linear'], ['zoom'], 0, 10, 22, 14]
 					},
 					paint: {
 						'text-halo-width': 1,
@@ -177,7 +175,7 @@
 			}
 		});
 
-		map.on('mouseenter', GREENAREAS_LAYER, (e: mapbox.MapMouseEvent) => {
+		map.on('mouseenter', GREENAREAS_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 			if (!e.features || e.features.length <= 0) return;
 
 			let current_feature = e.features[0];
@@ -213,7 +211,7 @@
 			popup?.remove();
 		});
 
-		map.on('mousemove', GREENAREAS_LAYER, (e: mapbox.MapMouseEvent) => {
+		map.on('mousemove', GREENAREAS_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 			if (!e.features || e.features.length <= 0) return;
 
 			let current_feature = e.features[0];
