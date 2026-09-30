@@ -123,9 +123,10 @@
 					'symbol-sort-key': ['-', ['to-number', ['get', 'nrows'], 0]]
 				},
 				paint: {
-					'text-color': '#d8e2dc',
-					'text-halo-color': 'rgba(6, 10, 16, 0.9)',
-					'text-halo-width': 1.2,
+					// A hovered city's own label is its highlight: white on a green halo.
+					'text-color': ['case', hover, '#ffffff', '#d8e2dc'],
+					'text-halo-color': ['case', hover, 'rgba(36, 161, 72, 0.95)', 'rgba(6, 10, 16, 0.9)'],
+					'text-halo-width': ['case', hover, 2, 1.2],
 					'text-opacity': ['interpolate', ['linear'], ['zoom'], 3.2, 0, 3.7, 1]
 				}
 			});
@@ -156,7 +157,17 @@
 			map.stop();
 			map.getCanvas().style.cursor = 'pointer';
 			set_hover(feature.id);
-			if (feature.geometry.type === 'Point')
+			/*
+				Name the city once. Zoomed in, its label may already be on the map —
+				then the hover lights that label up (see the label paint) and no
+				popup repeats it. The popup is for a city whose label is not shown:
+				zoomed out, or given way to a larger neighbour.
+			*/
+			const labelled = map
+				.queryRenderedFeatures({ layers: [CITY_LABEL_LAYER] })
+				.some((label) => label.id === feature.id);
+			if (labelled) popup.remove();
+			else if (feature.geometry.type === 'Point')
 				popup
 					.setLngLat(feature.geometry.coordinates as [number, number])
 					.setText(cityLabel(feature.properties?.name))
