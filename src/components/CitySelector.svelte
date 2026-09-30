@@ -144,11 +144,14 @@
 
 	h1 {
 		margin: 0;
-		/* One line on laptops and up (36px at most), so the globe keeps the room. */
-		font-size: clamp(1.5rem, 2.4vw, 2.25rem);
-		font-weight: 300;
-		line-height: 1.12;
-		letter-spacing: -0.01em;
+		/*
+			On one scale with the rest of the page: about twice the 14px of the
+			buttons and the hint (28.8px at 1440px wide, 30px at most), in regular
+			weight with semibold for the defined terms — not light against bold.
+		*/
+		font-size: clamp(1.5rem, 2vw, 1.875rem);
+		font-weight: 400;
+		line-height: 1.25;
 		color: #f4f4f4;
 		text-wrap: balance;
 	}
@@ -158,7 +161,7 @@
 		letter-spacing: inherit;
 	}
 	h1 :global(.bx--tooltip--definition .bx--tooltip__trigger) {
-		border-bottom: 2px dotted rgba(111, 220, 140, 0.8);
+		border-bottom: 1px dotted rgba(111, 220, 140, 0.9);
 	}
 	.term {
 		font-weight: 600;
