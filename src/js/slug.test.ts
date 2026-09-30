@@ -137,6 +137,7 @@ describe('cityLabel', () => {
 	it('shows underscores as spaces, and leaves everything else alone', () => {
 		expect(cityLabel('Newcastle_upon_Tyne')).toBe('Newcastle upon Tyne');
 		expect(cityLabel('Bolzano_-_Bozen')).toBe('Bolzano - Bozen');
+		expect(cityLabel('Alacant__Alicante')).toBe('Alacant / Alicante');
 		expect(cityLabel('Turin')).toBe('Turin');
 		expect(cityLabel('بوكان')).toBe('بوكان');
 	});

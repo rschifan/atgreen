@@ -40,7 +40,11 @@ export function safeDecode(value: string): string {
  * goes through this, while URLs and API calls keep the name as it is.
  */
 export function cityLabel(name: string): string {
-	return String(name ?? '').replaceAll('_', ' ');
+	// A double underscore is a bilingual name's slash: "Alacant__Alicante" is
+	// the city officially called "Alacant / Alicante".
+	return String(name ?? '')
+		.replaceAll('__', ' / ')
+		.replaceAll('_', ' ');
 }
 
 /**
