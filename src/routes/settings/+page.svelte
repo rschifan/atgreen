@@ -1,9 +1,18 @@
 <script lang="ts">
 	import { RadioTile, TileGroup } from 'carbon-components-svelte';
-	import ArrowRight from 'carbon-icons-svelte/lib/ArrowRight.svelte';
+	import ArrowLeft from 'carbon-icons-svelte/lib/ArrowLeft.svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { GLOBE_STYLES } from '../../js/globe_styles';
 	import { globe_style } from '../../stores/settings';
+
+	// Back returns to wherever in the app this page was opened from; opened
+	// directly (a bookmark, a new tab), it goes home.
+	let back = resolve('/');
+	afterNavigate(({ from }) => {
+		if (from?.url && from.url.pathname !== resolve('/settings'))
+			back = from.url.pathname + from.url.search;
+	});
 </script>
 
 <svelte:head>
@@ -11,6 +20,7 @@
 </svelte:head>
 
 <div class="settings">
+	<a class="back" href={back}><ArrowLeft /> Back</a>
 	<h1>Settings</h1>
 
 	<section aria-labelledby="globe-heading">
@@ -35,8 +45,6 @@
 				</RadioTile>
 			{/each}
 		</TileGroup>
-
-		<a class="back" href={resolve('/')}>See it on the globe <ArrowRight /></a>
 	</section>
 </div>
 
@@ -117,9 +125,15 @@
 	.back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-top: 1.5rem;
+		gap: 0.375rem;
+		margin-bottom: 1rem;
 		font-size: 0.875rem;
-		color: #78a9ff;
+		color: #c6c6c6;
+		text-decoration: none;
+	}
+	.back:hover,
+	.back:focus-visible {
+		color: #f4f4f4;
+		text-decoration: underline;
 	}
 </style>

@@ -17,6 +17,8 @@
 	} from 'carbon-components-svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import Settings from 'carbon-icons-svelte/lib/Settings.svelte';
+	import HeaderActionLink from '../components/HeaderActionLink.svelte';
 	import { resolve } from '$app/paths';
 	import { useRequest } from 'alova';
 	import { get_cities_metadata } from '../js/api';
@@ -78,8 +80,10 @@
 	$: cityPath = toCityPath($page.params.city ?? '');
 </script>
 
+<!-- The name is the way home, from every page. -->
 <Header
 	persistentHamburgerMenu={false}
+	href={resolve('/')}
 	companyName="ATGreen"
 	platformName={$current_city?.text}
 	bind:isSideNavOpen
@@ -104,6 +108,13 @@
 					?.properties?.name;
 				if (name) goto(resolve(ROUTES[section], { city: toCityPath(name) }));
 			}}
+		/>
+		<HeaderActionLink
+			href={resolve('/settings')}
+			icon={Settings}
+			linkIsActive={$page.url.pathname === resolve('/settings')}
+			aria-label="Settings"
+			title="Settings"
 		/>
 		<!--
 			`iconDescription` is what gives this button an accessible name: Carbon
