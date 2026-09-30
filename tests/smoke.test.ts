@@ -475,6 +475,41 @@ test.describe('ATGreen smoke', () => {
 		});
 	});
 
+	/*
+		Nothing covered the tutorial, so a broken image path shipped silently would
+		have been invisible to CI. Its paths are template strings —
+		`screenshots/wide/step${n}-h.webp` — so no static check can see them; only
+		loading each step can. Walks all five steps at both layouts and requires
+		the right file for each step AND that it actually decoded, since a missing
+		file still produces an <img> element, just a broken one.
+	*/
+	test('every tutorial step shows its image, at both layouts', async ({ page }) => {
+		await stubBackend(page);
+
+		for (const [label, viewport, variant] of [
+			['wide', { width: 1280, height: 800 }, 'h'],
+			['mobile', { width: 375, height: 812 }, 'm']
+		] as const) {
+			await page.setViewportSize(viewport);
+			await page.goto('/');
+			await page.getByRole('button', { name: 'Tutorial', exact: true }).click();
+
+			const img = page.locator('.bx--modal.is-visible img');
+			for (let n = 1; n <= 5; n++) {
+				await expect(img, `${label} step ${n}`).toHaveAttribute(
+					'src',
+					new RegExp(`step${n}-${variant}\\.webp$`)
+				);
+				await expect
+					.poll(() => img.evaluate((el: HTMLImageElement) => (el.complete ? el.naturalWidth : 0)), {
+						message: `${label} step ${n} image did not decode`
+					})
+					.toBeGreaterThan(0);
+				if (n < 5) await page.getByRole('button', { name: 'Next', exact: true }).click();
+			}
+		}
+	});
+
 	test('maps are torn down when their tab closes', async ({ page }) => {
 		// Counting .mapboxgl-map nodes does NOT test this: Svelte removes the DOM node
 		// whether or not map.remove() ran, so that assertion passes even with the

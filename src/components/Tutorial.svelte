@@ -14,12 +14,12 @@
 
 	function nextStep() {
 		step += 1;
-		src = `screenshots/wide/step${step + 1}-h.png`;
+		src = `screenshots/wide/step${step + 1}-h.webp`;
 	}
 
 	function previousStep() {
 		step -= 1;
-		src = `screenshots/wide/step${step + 1}-h.png`;
+		src = `screenshots/wide/step${step + 1}-h.webp`;
 	}
 
 	let content_width;
@@ -30,8 +30,8 @@
 	$: vertical = content_width <= 400;
 	$: device = vertical ? 'm' : 'h';
 	$: if (step >= 0) {
-		if (vertical) src = `screenshots/mobile/step${step + 1}-m.png`;
-		else src = `screenshots/wide/step${step + 1}-h.png`;
+		if (vertical) src = `screenshots/mobile/step${step + 1}-m.webp`;
+		else src = `screenshots/wide/step${step + 1}-h.webp`;
 	}
 </script>
 
