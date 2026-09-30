@@ -63,7 +63,10 @@ async function stubBackend(page: Page) {
 				// MapLibre rejects any `text-field` layer when the style declares no
 				// glyphs, and several data layers here use one. It must also be an
 				// ABSOLUTE URL: MapLibre 6 refuses relative glyph and sprite URLs.
-				glyphs: 'https://example.invalid/{fontstack}/{range}.pbf'
+				// On this host, so the route above answers it: the landing page's
+				// flight into a city zooms far enough to draw labels and fetch glyphs,
+				// and an unresolvable host would log a console error.
+				glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf'
 			})
 		});
 	});
@@ -140,12 +143,68 @@ test.describe('ATGreen smoke', () => {
 			};
 		});
 		expect(glow.image).toContain('radial-gradient');
-		// Head-on (pitch is locked at 0), the globe sits at the centre of its box.
-		expect(glow.x).toBeCloseTo(0.5, 1);
+		// Wide screens frame the globe right of the text: centre two thirds across
+		// and half way down, radius 36% of the height (259 px at 1280x720). The
+		// bounds catch a unit or reference-frame mix-up.
+		expect(glow.x).toBeCloseTo(0.67, 1);
 		expect(glow.y).toBeCloseTo(0.5, 1);
-		// About 110 px at zoom 0.5; the bounds catch a unit or frame mix-up.
-		expect(glow.r).toBeGreaterThan(50);
-		expect(glow.r).toBeLessThan(300);
+		expect(glow.r).toBeGreaterThan(200);
+		expect(glow.r).toBeLessThan(320);
+	});
+
+	/*
+		Reduced motion holds the globe still and makes the flight into a city
+		instant, which is what lets this test click a dot. It also pins the page
+		surviving that setting: the spin used to restart itself from inside
+		MapLibre's own event until "Maximum call stack size exceeded".
+	*/
+	test.describe('with reduced motion', () => {
+		test.use({ reducedMotion: 'reduce' });
+
+		test('clicking a city on the globe opens it', async ({ page }) => {
+			// It used to set `current_city` and stop there: since the move to URL
+			// routing, that renamed the header and left you on the globe.
+			const errors: string[] = [];
+			page.on('pageerror', (e) => errors.push(String(e)));
+			await stubBackend(page);
+			await page.goto('/');
+			await expect(page.locator('.map-root.lit')).toHaveCount(1, { timeout: 30000 });
+
+			// The fixture has one city, Turin. With the stubbed style the globe is
+			// transparent, so its dot's pale green core is the only such pixel there.
+			// Polled: the dots are drawn a moment after the globe, once the city list
+			// has arrived.
+			const findDot = async () => {
+				const png = (await page.screenshot()).toString('base64');
+				return page.evaluate(async (b64) => {
+					const cs = getComputedStyle(document.querySelector('.map-root') as Element);
+					const [gx, gy, gr] = ['--globe-x', '--globe-y', '--globe-r'].map((v) =>
+						parseFloat(cs.getPropertyValue(v))
+					);
+					const img = new Image();
+					img.src = 'data:image/png;base64,' + b64;
+					await img.decode();
+					const canvas = document.createElement('canvas');
+					canvas.width = img.width;
+					canvas.height = img.height;
+					const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+					ctx.drawImage(img, 0, 0);
+					const px = ctx.getImageData(0, 0, img.width, img.height).data;
+					for (let y = Math.max(0, Math.round(gy - gr)); y < gy + gr; y++)
+						for (let x = Math.max(0, Math.round(gx - gr)); x < gx + gr; x++) {
+							const i = (y * img.width + x) * 4;
+							if (px[i + 1] > 225 && px[i + 1] - px[i] > 15) return { x, y };
+						}
+					return null;
+				}, png);
+			};
+			let dot: { x: number; y: number } | null = null;
+			await expect.poll(async () => (dot = await findDot()), { timeout: 15000 }).not.toBeNull();
+			await page.mouse.click(dot!.x, dot!.y);
+			await page.waitForURL('**/Turin/measure');
+			await expect(page.locator('nav.sections')).toBeVisible();
+			expect(errors).toEqual([]);
+		});
 	});
 
 	test('selecting a city opens Measure and paints the accessibility grid', async ({ page }) => {
@@ -521,7 +580,7 @@ test.describe('ATGreen smoke', () => {
 		] as const) {
 			await page.setViewportSize(viewport);
 			await page.goto('/');
-			await page.getByRole('button', { name: 'Tutorial', exact: true }).click();
+			await page.getByRole('button', { name: 'How it works', exact: true }).click();
 
 			const img = page.locator('.bx--modal.is-visible img');
 			for (let n = 1; n <= 5; n++) {

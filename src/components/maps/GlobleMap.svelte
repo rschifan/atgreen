@@ -13,9 +13,10 @@
 		// silently kill the oldest, which surfaces later as a blank map far from the
 		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
 		// this matters more than when all six lived for the page's lifetime.
+		spinEnabled = false; // a spin queued by spin_soon() must not touch a removed map
 		map?.remove();
 		// Also runs during server rendering, which has no cancelAnimationFrame.
-		if (glow_frame) cancelAnimationFrame(glow_frame);
+		if (frame) cancelAnimationFrame(frame);
 	});
 
 	let map: maplibregl.Map;
@@ -24,6 +25,9 @@
 	export let styleLoaded = false;
 	export let container: string;
 	export let ref;
+	export let userInteracting = false;
+	// On narrow screens, the y (px) where the text above the globe ends.
+	export let clear_top = 0;
 
 	const default_map_properties: maplibregl.MapOptions = {
 		container: container,
@@ -35,28 +39,61 @@
 		// The CSS glow is a circle, which is the globe's outline only when it is
 		// seen head-on. Tilted, the outline shifts off-centre and the ring would
 		// visibly slide off the edge.
-		maxPitch: 0
+		maxPitch: 0,
+		attributionControl: { compact: true }
 		// No `projection` here: MapLibre takes it from the style, or from
 		// setProjection() once the style has loaded — see 'style.load' below.
 	};
 
 	let props: maplibregl.MapOptions = default_map_properties;
 
-	// At low zooms, complete a revolution every two minutes.
-	const secondsPerRevolution = 180;
-	// Above zoom level 5, do not rotate.
-	const maxSpinZoom = 3;
-	// Rotate at intermediate speeds between zoom levels 3 and 5.
-	const slowSpinZoom = 2;
-	export let userInteracting = false;
-	let spinEnabled = true;
 	let width = 0;
 	let height = 0;
 	let root: HTMLDivElement;
-	let glow_frame = 0;
+	let frame = 0;
+	let spinEnabled = true;
+	// The zoom fit() chose for this window. The spin slows and stops relative to
+	// it, so a bigger screen — which needs a higher zoom for the same framing —
+	// does not also get a slower globe.
+	let home_zoom = 0;
+
+	// One revolution every three minutes, as before.
+	const secondsPerRevolution = 180;
 
 	/*
-		The globe's radius ON SCREEN, measured rather than computed.
+		No auto-spin for anyone who asked their system for less motion. That is
+		also a crash fix: MapLibre honours the setting by finishing easeTo() at
+		once, so 'moveend' fired inside the call and started the next spin, and the
+		landing page died with "Maximum call stack size exceeded".
+	*/
+	const reduced_motion =
+		typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	/*
+		Where the globe sits and how large it is on screen. Wide windows put it
+		right of the hero text. Narrow ones stack it under the text, rising from
+		the bottom edge: its top starts just below `clear_top`, where the text ends
+		— measured by CitySelector, because wrapping varies by device — and what
+		does not fit runs off the bottom. 1056px is Carbon's `lg` breakpoint, the
+		one CitySelector's layout switches at.
+	*/
+	function framing(w: number, h: number) {
+		if (w >= 1056)
+			return {
+				padding: { left: w * 0.34, top: 0, right: 0, bottom: 0 },
+				radius: Math.min(w * 0.25, h * 0.36)
+			};
+		const radius = Math.min(w * 0.62, h * 0.5);
+		// MapLibre centres the globe in the padded box, so its centre is at (h + top) / 2.
+		const centre = Math.min(clear_top + 24 + radius, h * 0.95);
+		return { padding: { left: 0, top: Math.max(0, 2 * centre - h), right: 0, bottom: 0 }, radius };
+	}
+
+	// The text above can wrap to a new height after the map has loaded.
+	$: if (mapLoaded && clear_top) fit();
+
+	/*
+		The globe's centre and radius ON SCREEN, measured rather than computed.
 
 		MapLibre sizes the globe as worldSize / 2π / cos(centre latitude), then
 		draws it through a perspective camera, so the visible disc is smaller
@@ -67,9 +104,7 @@
 		latitude or window size. project() ignores occlusion, so points past the
 		limb land back inside the disc rather than further out. Public API only.
 	*/
-	function measure_glow() {
-		glow_frame = 0;
-		if (!map || !root) return;
+	function measure() {
 		const c = map.getCenter();
 		const lat0 = (c.lat * Math.PI) / 180;
 		const o = map.project(c);
@@ -86,17 +121,142 @@
 			const d = Math.hypot(p.x - o.x, p.y - o.y);
 			if (Number.isFinite(d)) r = Math.max(r, d);
 		}
-		root.style.setProperty('--globe-x', `${o.x.toFixed(1)}px`);
-		root.style.setProperty('--globe-y', `${o.y.toFixed(1)}px`);
+		return { x: o.x, y: o.y, r };
+	}
+
+	// Frame the globe for this window. The on-screen radius grows a little less
+	// than 2× per zoom level under perspective, so correct a few times, measuring
+	// each pass; it converges to well under a pixel.
+	function fit() {
+		const { padding, radius } = framing(width, height);
+		map.setPadding(padding);
+		for (let i = 0; i < 4; i++) {
+			const r = measure().r;
+			// A zero-sized canvas measures 0, and log2(x / 0) would zoom to Infinity.
+			if (!(r > 0 && radius > 0)) break;
+			map.setZoom(map.getZoom() + Math.log2(radius / r));
+		}
+		home_zoom = map.getZoom();
+	}
+
+	/*
+		Three star layers, far to near: [px moved per degree of rotation, as a share
+		of the camera's focal length; tile width; tile height]. The stars are fixed
+		in the sky, so as the globe turns under the camera they slide the other way
+		— the nearer layers faster, which reads as depth. Tile sizes match the CSS.
+	*/
+	const STAR_LAYERS = [
+		[0.35, 199, 211],
+		[0.6, 331, 347],
+		[1, 523, 487]
+	] as const;
+	let stars: HTMLDivElement[] = [];
+
+	// Everything drawn around the map follows the camera: the glow is placed on the
+	// measured globe, and the stars are shifted by the centre's longitude/latitude.
+	function update_space() {
+		frame = 0;
+		if (!map || !root) return;
+		const { x, y, r } = measure();
+		root.style.setProperty('--globe-x', `${x.toFixed(1)}px`);
+		root.style.setProperty('--globe-y', `${y.toFixed(1)}px`);
 		root.style.setProperty('--globe-r', `${r.toFixed(1)}px`);
+
+		const c = map.getCenter();
+		// Focal length in px per degree: MapLibre's camera has a 36.87° field of view,
+		// so the focal length is 1.5 × the canvas height.
+		const per_degree = (1.5 * height * Math.PI) / 180;
+		STAR_LAYERS.forEach(([depth, tw, th], i) => {
+			const k = depth * per_degree;
+			if (stars[i])
+				stars[i].style.transform =
+					`translate3d(${((c.lng * k) % tw).toFixed(1)}px, ${((-c.lat * k) % th).toFixed(1)}px, 0)`;
+		});
 	}
 
 	// At most once per frame: 'move' fires continuously while the globe spins.
-	function schedule_glow() {
-		if (!glow_frame) glow_frame = requestAnimationFrame(measure_glow);
+	function schedule_space() {
+		if (!frame) frame = requestAnimationFrame(update_space);
+	}
+
+	/*
+		The landing globe is a picture of the Earth, not a street map. The dark
+		basemap's roads, land use and labels are hidden; the oceans turn deep blue;
+		and the land is Natural Earth's shaded relief. OpenFreeMap serves that
+		raster from the same host as the style, so the CSP needs nothing new.
+
+		The relief tiles are opaque, with white oceans, so the layer goes UNDER the
+		vector water, which paints the oceans over them. maxzoom 2 caps the
+		download near 1 MB for the landing view; the flight into a city zooms
+		further on the same tiles, which is fine for the second it lasts.
+	*/
+	const KEEP = new Set(['background', 'water', 'boundary_country_z0-4', 'boundary_country_z5-']);
+	function dress_globe() {
+		for (const layer of map.getStyle().layers) {
+			if (!KEEP.has(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
+		}
+		const paint = (
+			id: string,
+			prop: Parameters<typeof map.setPaintProperty>[1],
+			value: Parameters<typeof map.setPaintProperty>[2]
+		) => {
+			if (map.getLayer(id)) map.setPaintProperty(id, prop, value);
+		};
+		paint('background', 'background-color', '#1b2a22');
+		paint('water', 'fill-color', '#0a1b2b');
+		paint('boundary_country_z0-4', 'line-color', 'rgba(230, 240, 235, 0.22)');
+		paint('boundary_country_z5-', 'line-color', 'rgba(230, 240, 235, 0.22)');
+
+		map.addSource('relief', {
+			type: 'raster',
+			tiles: ['https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png'],
+			tileSize: 512,
+			maxzoom: 2,
+			attribution: '<a href="https://www.naturalearthdata.com/">Natural Earth</a>'
+		});
+		map.addLayer(
+			{
+				id: 'relief',
+				type: 'raster',
+				source: 'relief',
+				paint: {
+					'raster-brightness-max': 0.62,
+					'raster-saturation': 0.15,
+					'raster-contrast': 0.12
+				}
+			},
+			map.getLayer('water') ? 'water' : undefined
+		);
+	}
+
+	/**
+	 * Fly into a city and resolve when the camera arrives: the landing page's
+	 * hand-off to the city view. For users who prefer reduced motion MapLibre makes
+	 * the flight instant, and this resolves at once.
+	 */
+	export function fly_to(center: maplibregl.LngLatLike): Promise<void> {
+		spinEnabled = false;
+		return new Promise((resolve) => {
+			if (!map) return resolve();
+			// The spin's own easeTo is interrupted by the flight and also ends with a
+			// 'moveend', so wait for the one this call tagged.
+			const arrived = (e: maplibregl.MapLibreEvent & { fly_in?: boolean }) => {
+				if (!e.fly_in) return;
+				map.off('moveend', arrived);
+				resolve();
+			};
+			map.on('moveend', arrived);
+			map.flyTo({ center, zoom: home_zoom + 3.5, duration: 1400 }, { fly_in: true });
+			// Never hold a navigation hostage to an animation.
+			setTimeout(resolve, 2500);
+		});
 	}
 
 	$: userInteracting = $current_city ? true : false;
+
+	// Resume the spin when an interaction ends with the globe at rest — letting go
+	// of a hovered city fires no 'moveend' to restart it.
+	$: if (mapLoaded && !userInteracting) spin_soon();
 
 	function init() {
 		if (props) map = new maplibregl.Map(props);
@@ -108,12 +268,11 @@
 			// in place — setting it earlier is silently overwritten by the style's
 			// own (mercator) default.
 			map.setProjection({ type: 'globe' });
+			dress_globe();
 			styleLoaded = true;
 		});
 
 		map.on('load', async () => {
-			mapLoaded = true;
-
 			/*
 				MapLibre's own atmosphere is switched OFF and the green glow is drawn
 				in CSS instead (.map-root.lit::after).
@@ -130,74 +289,75 @@
 				'sky-color': 'rgba(22, 22, 22, 0)',
 				'atmosphere-blend': 0
 			});
-			measure_glow();
-			map.on('move', schedule_glow);
-			map.on('resize', schedule_glow);
+			fit();
+			update_space();
+			mapLoaded = true;
+			map.on('move', schedule_space);
+			map.on('resize', () => {
+				fit();
+				schedule_space();
+			});
+
 			map.on('mousedown', () => {
 				userInteracting = true;
 			});
-
 			map.on('mouseup', () => {
 				userInteracting = false;
-				// spinGlobe();
 			});
-
 			map.on('touchstart', () => {
 				userInteracting = true;
 			});
-
 			map.on('touchend', () => {
 				userInteracting = false;
-				spinGlobe();
+				spin_soon();
 			});
-
 			map.on('dragstart', () => {
 				userInteracting = true;
 			});
-
 			map.on('dragend', () => {
 				userInteracting = false;
-				// spinGlobe();
-			});
-			map.on('pitchend', () => {
-				userInteracting = false;
-				// spinGlobe();
-			});
-			map.on('rotatestart', () => {
-				userInteracting = false;
-				// spinGlobe();
-			});
-
-			map.on('rotateend', () => {
-				userInteracting = false;
-				// spinGlobe();
 			});
 			map.on('moveend', () => {
-				spinGlobe();
+				spin_soon();
 			});
-			spinGlobe();
+			spin_soon();
 		});
 
 		ref = map;
 	}
+	/*
+		Every spin starts one microtask late, never inside a MapLibre event.
+		MapLibre fires 'moveend' from INSIDE whichever camera call interrupts the
+		spin — a flyTo, a gesture, the next easeTo. Starting an ease right there
+		re-enters the camera mid-call: the outer call then overwrites the new
+		ease's frame id, the orphaned frame stays queued, and a later repaint
+		throws "this._onEaseFrame is not a function". Seen on clicking a city.
+
+		The deferred spin must then yield to any camera move already running —
+		spinGlobe() checks isMoving() — or it would interrupt that move, whose
+		'moveend' would queue another spin, forever.
+	*/
+	function spin_soon() {
+		queueMicrotask(spinGlobe);
+	}
+
 	// https://docs.mapbox.com/mapbox-gl-js/example/globe-spin/
 	function spinGlobe() {
-		if ($current_city) return;
+		if (!map || map.isMoving()) return;
+		if ($current_city || reduced_motion || !spinEnabled || userInteracting) return;
 
-		const zoom = map.getZoom();
-		if (spinEnabled && !userInteracting && zoom < maxSpinZoom) {
-			let distancePerSecond = 360 / secondsPerRevolution;
-			if (zoom > slowSpinZoom) {
-				// Slow spinning at higher zooms
-				const zoomDif = (maxSpinZoom - zoom) / (maxSpinZoom - slowSpinZoom);
-				distancePerSecond *= zoomDif;
-			}
-			const center = map.getCenter();
-			center.lng -= distancePerSecond;
-			// Smoothly animate the map over one second.
-			// When this animation is complete, it calls a 'moveend' event.
-			map.easeTo({ center, duration: 1000, easing: (n) => n });
-		}
+		// Full speed at the home framing, slowing over the next zoom level and
+		// stopping one after that, so a user zooming in to look is not fighting it.
+		const over = map.getZoom() - home_zoom;
+		if (over >= 1.5) return;
+		let distancePerSecond = 360 / secondsPerRevolution;
+		if (over > 0.5) distancePerSecond *= 1.5 - over;
+
+		const center = map.getCenter();
+		center.lng -= distancePerSecond;
+		// Smoothly animate the map over one second.
+		// When this animation is complete, it calls a 'moveend' event.
+		map.easeTo({ center, duration: 1000, easing: (n) => n });
 	}
 	// ##############################################################################
 
@@ -215,7 +375,16 @@
 	bind:clientWidth={width}
 	bind:clientHeight={height}
 >
-	<div id={container} class="map-canvas" />
+	<!-- Decorative: three layers of stars, far to near (STAR_LAYERS). -->
+	<div class="stars stars-0" bind:this={stars[0]} aria-hidden="true"></div>
+	<div class="stars stars-1" bind:this={stars[1]} aria-hidden="true"></div>
+	<div class="stars stars-2" bind:this={stars[2]} aria-hidden="true"></div>
+
+	<div id={container} class="map-canvas"></div>
+
+	{#if mapLoaded}
+		<div class="shade" aria-hidden="true"></div>
+	{/if}
 
 	{#if map}
 		<slot />
@@ -225,30 +394,78 @@
 <style>
 	/*
 		The map fills its stage absolutely, so no ancestor has to cooperate by
-		passing a height down. `height` is measured rather than declared, which
-		finally gives the `$: if (width && height && map) map.resize()` guard a
-		real input instead of the constant 500 it used to compare.
+		passing a height down.
 	*/
 	.map-root {
 		position: absolute;
 		inset: 0;
+		overflow: hidden;
 		/*
-			The star field, in CSS. Mapbox drew it inside the map (star-intensity);
-			MapLibre has no equivalent, so it is painted behind a transparent sky.
-			Seven offset layers of single-pixel dots at different sizes and alphas,
-			tiled at a size that does not divide evenly into common viewports, so
-			no obvious grid shows.
+			Deep space rather than flat black: a blue-black ground with two faint
+			nebulae, so the page has depth before a single star is drawn.
 		*/
-		background-color: #161616;
+		background:
+			radial-gradient(ellipse 55% 45% at 18% 22%, rgba(52, 88, 140, 0.16), transparent 70%),
+			radial-gradient(ellipse 45% 40% at 88% 88%, rgba(36, 161, 72, 0.08), transparent 70%), #060a10;
+	}
+
+	/*
+		The stars. Mapbox drew them inside the map (star-intensity); MapLibre has no
+		equivalent, so they are painted here, behind a transparent sky. Each layer
+		is a tile of single dots at a size that does not divide common viewports,
+		oversized by one tile on every side so update_space() can slide it by up to
+		a tile without exposing an edge — the slide wraps, so a tile is all it needs.
+	*/
+	.stars {
+		position: absolute;
+		pointer-events: none;
+		will-change: transform;
+	}
+	.stars-0 {
+		inset: -211px -199px;
+		background-size: 199px 211px;
 		background-image:
-			radial-gradient(1px 1px at 23px 41px, rgba(255, 255, 255, 0.7), transparent),
-			radial-gradient(1px 1px at 131px 97px, rgba(255, 255, 255, 0.5), transparent),
-			radial-gradient(1.5px 1.5px at 211px 173px, rgba(255, 255, 255, 0.6), transparent),
-			radial-gradient(1px 1px at 67px 223px, rgba(255, 255, 255, 0.35), transparent),
-			radial-gradient(1px 1px at 173px 19px, rgba(255, 255, 255, 0.45), transparent),
-			radial-gradient(1px 1px at 251px 251px, rgba(255, 255, 255, 0.3), transparent),
-			radial-gradient(1.5px 1.5px at 101px 157px, rgba(255, 255, 255, 0.4), transparent);
-		background-size: 277px 263px;
+			radial-gradient(0.8px 0.8px at 17px 29px, rgba(255, 255, 255, 0.5), transparent),
+			radial-gradient(0.8px 0.8px at 61px 143px, rgba(255, 255, 255, 0.4), transparent),
+			radial-gradient(0.8px 0.8px at 103px 71px, rgba(220, 230, 255, 0.45), transparent),
+			radial-gradient(0.8px 0.8px at 139px 181px, rgba(255, 255, 255, 0.35), transparent),
+			radial-gradient(0.8px 0.8px at 181px 37px, rgba(255, 255, 255, 0.5), transparent),
+			radial-gradient(0.8px 0.8px at 43px 197px, rgba(255, 255, 255, 0.3), transparent),
+			radial-gradient(0.8px 0.8px at 157px 113px, rgba(255, 240, 225, 0.4), transparent),
+			radial-gradient(0.8px 0.8px at 89px 7px, rgba(255, 255, 255, 0.35), transparent);
+	}
+	.stars-1 {
+		inset: -347px -331px;
+		background-size: 331px 347px;
+		background-image:
+			radial-gradient(1.1px 1.1px at 37px 59px, rgba(255, 255, 255, 0.75), transparent),
+			radial-gradient(1.1px 1.1px at 211px 23px, rgba(255, 255, 255, 0.6), transparent),
+			radial-gradient(1.1px 1.1px at 283px 199px, rgba(210, 225, 255, 0.7), transparent),
+			radial-gradient(1.1px 1.1px at 113px 281px, rgba(255, 255, 255, 0.55), transparent),
+			radial-gradient(1.1px 1.1px at 167px 157px, rgba(255, 245, 230, 0.65), transparent),
+			radial-gradient(1.1px 1.1px at 307px 331px, rgba(255, 255, 255, 0.5), transparent);
+		animation: twinkle 9s ease-in-out infinite alternate;
+	}
+	.stars-2 {
+		inset: -487px -523px;
+		background-size: 523px 487px;
+		background-image:
+			radial-gradient(1.6px 1.6px at 97px 137px, rgba(255, 255, 255, 0.95), transparent),
+			radial-gradient(1.5px 1.5px at 389px 61px, rgba(215, 230, 255, 0.9), transparent),
+			radial-gradient(1.4px 1.4px at 461px 353px, rgba(255, 255, 255, 0.85), transparent),
+			radial-gradient(1.6px 1.6px at 229px 419px, rgba(255, 238, 220, 0.9), transparent),
+			radial-gradient(1.3px 1.3px at 31px 311px, rgba(255, 255, 255, 0.8), transparent);
+		animation: twinkle 6s ease-in-out infinite alternate-reverse;
+	}
+	@keyframes twinkle {
+		to {
+			opacity: 0.55;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.stars {
+			animation: none;
+		}
 	}
 
 	/*
@@ -266,13 +483,71 @@
 	.map-canvas {
 		width: 100%;
 		height: 100%;
+		/* Above the stars, which are positioned too and come first. */
+		position: relative;
+	}
+
+	/* The map credits, dark to sit quietly on a dark page instead of a white box. */
+	.map-root :global(.maplibregl-ctrl-attrib) {
+		background: rgba(6, 10, 16, 0.7);
+		color: #a8a8a8;
+	}
+	.map-root :global(.maplibregl-ctrl-attrib a) {
+		color: #c6c6c6;
+	}
+	.map-root :global(.maplibregl-ctrl-attrib-button) {
+		filter: invert(1);
+	}
+
+	/*
+		Light on the globe from the upper left: darkens the far side of the sphere
+		so it reads as a ball rather than a disc. Masked to the globe's measured
+		outline, because the light's centre is not the globe's.
+	*/
+	.shade {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			circle at calc(var(--globe-x) - var(--globe-r) * 0.35)
+				calc(var(--globe-y) - var(--globe-r) * 0.4),
+			rgba(0, 8, 16, 0) calc(var(--globe-r) * 0.45),
+			rgba(0, 8, 16, 0.55) calc(var(--globe-r) * 1.45)
+		);
+		-webkit-mask: radial-gradient(
+			circle at var(--globe-x) var(--globe-y),
+			#000 var(--globe-r),
+			transparent calc(var(--globe-r) + 0.5px)
+		);
+		mask: radial-gradient(
+			circle at var(--globe-x) var(--globe-y),
+			#000 var(--globe-r),
+			transparent calc(var(--globe-r) + 0.5px)
+		);
+	}
+
+	/*
+		Light scattered well beyond the rim: a wide, faint green bloom behind the
+		globe, so it sits in a glow of its own rather than on bare black.
+	*/
+	.map-root.lit::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			circle at var(--globe-x) var(--globe-y),
+			rgba(36, 161, 72, 0.16) var(--globe-r),
+			rgba(36, 161, 72, 0.05) calc(var(--globe-r) * 1.5),
+			rgba(36, 161, 72, 0) calc(var(--globe-r) * 2.2)
+		);
 	}
 
 	/*
 		The green glow Mapbox drew with setFog: a bright rim at the globe's edge,
 		a haze fading inward over the globe and a halo fading out into space.
 		Centred on the globe and sized to its measured edge (--globe-*, set by
-		measure_glow), so it tracks zoom, drag and window size. Laid over the map
+		update_space), so it tracks zoom, drag and window size. Laid over the map
 		— outside the globe the canvas is transparent anyway — with pointer events
 		passing through. Shown only once the map has loaded and been measured.
 	*/
