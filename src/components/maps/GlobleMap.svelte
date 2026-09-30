@@ -126,6 +126,9 @@
 	function fit() {
 		const { padding, radius } = framing(width, height);
 		map.setPadding(padding);
+		// Free the zoom range while fitting; it is set again from the new home below.
+		map.setMinZoom(0);
+		map.setMaxZoom(22);
 		for (let i = 0; i < 4; i++) {
 			const r = measure().r;
 			// A zero-sized canvas measures 0, and log2(x / 0) would zoom to Infinity.
@@ -133,6 +136,14 @@
 			map.setZoom(map.getZoom() + Math.log2(radius / r));
 		}
 		home_zoom = map.getZoom();
+		/*
+			The home page globe is for picking a city, not for reading streets —
+			that is what the city pages are for. Like the product globes it is
+			modelled on, it zooms only so far: enough to pull apart the crowded
+			cities of Europe, not so far that labels pile up.
+		*/
+		map.setMinZoom(Math.max(0, home_zoom - 0.6));
+		map.setMaxZoom(home_zoom + 2.5);
 	}
 
 	/*
@@ -207,7 +218,9 @@
 			type: 'raster',
 			tiles: ['https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png'],
 			tileSize: 512,
-			maxzoom: 2,
+			// The home view uses zoom-2 tiles (about 1 MB); sharper ones load only
+			// for the part of the globe a user zooms into.
+			maxzoom: 4,
 			attribution: '<a href="https://www.naturalearthdata.com/">Natural Earth</a>'
 		});
 		map.addLayer(

@@ -111,9 +111,22 @@ export function apply_globe_style(
 	switch (style) {
 		case 'dots': {
 			if (has(RELIEF)) map.setLayoutProperty(RELIEF, 'visibility', 'none');
-			for (const id of BORDERS) if (has(id)) map.setLayoutProperty(id, 'visibility', 'none');
-			paint('background', 'background-color', '#0a1826');
 			paint('water', 'fill-color', '#0a1826');
+			// Zoomed in, the lattice is too coarse to read as land: it fades, and the
+			// real shape of the land and its borders come up in its place.
+			paint('background', 'background-color', [
+				'interpolate',
+				['linear'],
+				['zoom'],
+				2.6,
+				'#0a1826',
+				3.6,
+				'#15283a'
+			]);
+			for (const id of BORDERS) {
+				paint(id, 'line-color', '#9fb4bf');
+				paint(id, 'line-opacity', ['interpolate', ['linear'], ['zoom'], 3, 0, 4, 0.3]);
+			}
 			// 8,400 points of a Fibonacci lattice kept where Natural Earth has land,
 			// stored as bare [lng, lat] pairs (scripts/land-dots.mjs made them).
 			let cancelled = false;
@@ -138,9 +151,9 @@ export function apply_globe_style(
 							type: 'circle',
 							source: 'land-dots',
 							paint: {
-								'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 1, 1, 4, 2.6],
+								'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1, 4, 1.4],
 								'circle-color': '#5f7f8f',
-								'circle-opacity': 0.75
+								'circle-opacity': ['interpolate', ['linear'], ['zoom'], 2.6, 0.75, 3.8, 0]
 							}
 						},
 						halo

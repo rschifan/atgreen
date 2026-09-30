@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { cityLabel } from '../../../js/slug';
 	import Draw from '../../../components/Draw.svelte';
 	import { current_city, metadata } from '../../../stores/stores.js';
 </script>
 
 <svelte:head>
-	<title>{$current_city?.text ?? 'ATGreen'} — Draw</title>
+	<title>{$current_city ? cityLabel($current_city.text) : 'ATGreen'} — Draw</title>
 </svelte:head>
 
 {#if $current_city}
