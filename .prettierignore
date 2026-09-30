@@ -20,3 +20,6 @@ yarn.lock
 
 # Recorded API responses - kept byte-for-byte as captured
 /tests/fixtures
+
+# Generated data, kept minified (scripts/land-dots.mjs).
+static/land-dots.json

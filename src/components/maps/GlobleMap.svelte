@@ -26,7 +26,7 @@
 	export let container: string;
 	export let ref;
 	export let userInteracting = false;
-	// On narrow screens, the y (px) where the text above the globe ends.
+	// The y (px) where the text above the globe ends.
 	export let clear_top = 0;
 
 	const default_map_properties: maplibregl.MapOptions = {
@@ -70,22 +70,16 @@
 		typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	/*
-		Where the globe sits and how large it is on screen. Wide windows put it
-		right of the hero text. Narrow ones stack it under the text, rising from
-		the bottom edge: its top starts just below `clear_top`, where the text ends
-		— measured by CitySelector, because wrapping varies by device — and what
-		does not fit runs off the bottom. 1056px is Carbon's `lg` breakpoint, the
-		one CitySelector's layout switches at.
+		Where the globe sits and how large it is on screen: centred, under the
+		text. Its top starts just below `clear_top`, where the text ends — measured
+		by CitySelector, because wrapping varies by device. Wide screens fit the
+		whole globe into the height that is left; on narrow ones the width caps it,
+		a little wider than the screen, so its sides run off the edges.
 	*/
 	function framing(w: number, h: number) {
-		if (w >= 1056)
-			return {
-				padding: { left: w * 0.34, top: 0, right: 0, bottom: 0 },
-				radius: Math.min(w * 0.25, h * 0.36)
-			};
-		const radius = Math.min(w * 0.62, h * 0.5);
+		const radius = Math.max(80, Math.min(w * 0.62, (h - clear_top - 40) / 2));
 		// MapLibre centres the globe in the padded box, so its centre is at (h + top) / 2.
-		const centre = Math.min(clear_top + 24 + radius, h * 0.95);
+		const centre = clear_top + 20 + radius;
 		return { padding: { left: 0, top: Math.max(0, 2 * centre - h), right: 0, bottom: 0 }, radius };
 	}
 
@@ -229,29 +223,6 @@
 		);
 	}
 
-	/**
-	 * Fly into a city and resolve when the camera arrives: the landing page's
-	 * hand-off to the city view. For users who prefer reduced motion MapLibre makes
-	 * the flight instant, and this resolves at once.
-	 */
-	export function fly_to(center: maplibregl.LngLatLike): Promise<void> {
-		spinEnabled = false;
-		return new Promise((resolve) => {
-			if (!map) return resolve();
-			// The spin's own easeTo is interrupted by the flight and also ends with a
-			// 'moveend', so wait for the one this call tagged.
-			const arrived = (e: maplibregl.MapLibreEvent & { fly_in?: boolean }) => {
-				if (!e.fly_in) return;
-				map.off('moveend', arrived);
-				resolve();
-			};
-			map.on('moveend', arrived);
-			map.flyTo({ center, zoom: home_zoom + 3.5, duration: 1400 }, { fly_in: true });
-			// Never hold a navigation hostage to an animation.
-			setTimeout(resolve, 2500);
-		});
-	}
-
 	$: userInteracting = $current_city ? true : false;
 
 	// Resume the spin when an interaction ends with the globe at rest — letting go
@@ -328,7 +299,7 @@
 	/*
 		Every spin starts one microtask late, never inside a MapLibre event.
 		MapLibre fires 'moveend' from INSIDE whichever camera call interrupts the
-		spin — a flyTo, a gesture, the next easeTo. Starting an ease right there
+		spin — a gesture, a stop on hover, the next easeTo. Starting an ease right there
 		re-enters the camera mid-call: the outer call then overwrites the new
 		ease's frame id, the orphaned frame stays queued, and a later repaint
 		throws "this._onEaseFrame is not a function". Seen on clicking a city.
