@@ -90,7 +90,7 @@ describe('escape_html / html', () => {
 		expect(escape_html(42)).toBe('42');
 	});
 
-	// The reason this exists: these popup strings go to Mapbox's setHTML, which
+	// The reason this exists: these popup strings go to MapLibre's setHTML, which
 	// assigns to innerHTML, and osm_name is OpenStreetMap free text — anyone with
 	// an account can rename a park. The live CSP carries script-src 'unsafe-inline',
 	// so an injected handler would execute.

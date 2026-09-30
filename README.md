@@ -37,7 +37,7 @@ rather than hard-coded, so adding one is a server-side change.
 ```
 browser ── SvelteKit (adapter-node, :4000) ── nginx ── PostgREST (:3002) ── PostgreSQL "esa"
               Carbon components                          /rpc/*          OSM · GHS-POP · ESA WorldCover
-              mapbox-gl
+              MapLibre GL JS ── basemap: OpenFreeMap (OSM vector tiles, no key)
 ```
 
 The frontend is a thin client: every indicator is computed in PostgreSQL and returned as
@@ -60,7 +60,7 @@ is hard-coded in `src/js/api.js`), so a dev server needs network access but no l
 
 ```bash
 npm run test:unit     # vitest — pure logic in src/js
-npm run test:e2e      # playwright — hermetic, stubs the API and Mapbox
+npm run test:e2e      # playwright — hermetic, stubs the API and the basemap style
 npm run check:ratchet # svelte-check + eslint, against a recorded baseline
 npm run lint          # prettier + eslint
 npm run build         # production build into build/

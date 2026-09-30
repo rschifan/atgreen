@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, setContext } from 'svelte';
-	import { BASEMAP_URL, key, mapbox } from '../../js/mapbox.js';
+	import { BASEMAP_STYLE, key, maplibregl } from '../../js/map.js';
 	import { current_city } from '../../stores/stores.js';
 
 	onMount(() => {
@@ -16,24 +16,25 @@
 		map?.remove();
 	});
 
-	let map: mapbox.Map;
+	let map: maplibregl.Map;
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
 	export let container: string;
 	export let ref;
 
-	const default_map_properties = {
+	const default_map_properties: maplibregl.MapOptions = {
 		container: container,
-		style: BASEMAP_URL,
+		style: BASEMAP_STYLE,
 		center: [2.1686, 41.390205],
 		zoom: 0.5,
 		bearing: 0,
-		pitch: 0,
-		projection: 'globe'
+		pitch: 0
+		// No `projection` here: MapLibre takes it from the style, or from
+		// setProjection() once the style has loaded — see 'style.load' below.
 	};
 
-	let props: {} = default_map_properties;
+	let props: maplibregl.MapOptions = default_map_properties;
 
 	// At low zooms, complete a revolution every two minutes.
 	const secondsPerRevolution = 180;
@@ -49,22 +50,35 @@
 	$: userInteracting = $current_city ? true : false;
 
 	function init() {
-		if (props) map = new mapbox.Map(props);
-		else map = new mapbox.Map(default_map_properties);
+		if (props) map = new maplibregl.Map(props);
+		else map = new maplibregl.Map(default_map_properties);
 
 		map.on('style.load', () => {
+			// Mapbox accepted `projection: 'globe'` in the constructor. MapLibre
+			// reads projection from the style, so it has to be set once a style is
+			// in place — setting it earlier is silently overwritten by the style's
+			// own (mercator) default.
+			map.setProjection({ type: 'globe' });
 			styleLoaded = true;
 		});
 
 		map.on('load', async () => {
 			mapLoaded = true;
 
-			map.setFog({
-				'horizon-blend': 0.02,
-				color: '#006d2c',
-				'high-color': '#161616',
-				'space-color': '#161616',
-				'star-intensity': 0.15
+			/*
+				MapLibre's equivalent of Mapbox's setFog. The green limb glow carries
+				over; the star field does not, because MapLibre has no
+				`star-intensity`. Space is left transparent instead, so the CSS star
+				field on .map-root shows through around the globe.
+			*/
+			map.setSky({
+				'sky-color': 'rgba(22, 22, 22, 0)',
+				'horizon-color': '#006d2c',
+				'fog-color': '#161616',
+				'sky-horizon-blend': 0.5,
+				'horizon-fog-blend': 0.8,
+				'fog-ground-blend': 0.9,
+				'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 0.6, 7, 0]
 			});
 			map.on('mousedown', () => {
 				userInteracting = true;
@@ -159,6 +173,23 @@
 	.map-root {
 		position: absolute;
 		inset: 0;
+		/*
+			The star field, in CSS. Mapbox drew it inside the map (star-intensity);
+			MapLibre has no equivalent, so it is painted behind a transparent sky.
+			Seven offset layers of single-pixel dots at different sizes and alphas,
+			tiled at a size that does not divide evenly into common viewports, so
+			no obvious grid shows.
+		*/
+		background-color: #161616;
+		background-image:
+			radial-gradient(1px 1px at 23px 41px, rgba(255, 255, 255, 0.7), transparent),
+			radial-gradient(1px 1px at 131px 97px, rgba(255, 255, 255, 0.5), transparent),
+			radial-gradient(1.5px 1.5px at 211px 173px, rgba(255, 255, 255, 0.6), transparent),
+			radial-gradient(1px 1px at 67px 223px, rgba(255, 255, 255, 0.35), transparent),
+			radial-gradient(1px 1px at 173px 19px, rgba(255, 255, 255, 0.45), transparent),
+			radial-gradient(1px 1px at 251px 251px, rgba(255, 255, 255, 0.3), transparent),
+			radial-gradient(1.5px 1.5px at 101px 157px, rgba(255, 255, 255, 0.4), transparent);
+		background-size: 277px 263px;
 	}
 
 	/*

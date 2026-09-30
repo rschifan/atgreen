@@ -1,3 +1,4 @@
+import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl';
 import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from './colors';
 import { ClassificationScheme, AccessibilityIndexType } from './types';
 
@@ -15,7 +16,7 @@ export function extent(data: number[]): { min: number; max: number } {
 		if (v > max) max = v;
 	}
 	// An empty (or all-NaN) array has no extent; 0..1 keeps the ramp well-formed
-	// rather than emitting Infinity into a Mapbox expression.
+	// rather than emitting Infinity into a MapLibre expression.
 	if (min === Infinity) return { min: 0, max: 1 };
 	return { min, max };
 }
@@ -99,7 +100,7 @@ export function get_colormap_rule(
 	type: AccessibilityIndexType,
 	classification: string,
 	threshold: number
-) {
+): ExpressionSpecification {
 	// `Math.max(...data)` passes every value as an argument. Measured on node 22:
 	// 100,000 arguments is fine, 125,000 throws "Maximum call stack size exceeded".
 	// Grids are in the thousands today (Milan, the largest checked, is 13,220), so
@@ -110,7 +111,7 @@ export function get_colormap_rule(
 
 	const low = to_scale(min, classification);
 	const high = to_scale(max, classification);
-	// Mapbox requires strictly ascending stops. The threshold is a target, not a
+	// MapLibre requires strictly ascending stops. The threshold is a target, not a
 	// property of the data, so a city whose values all beat it (max < threshold) or
 	// all miss it (threshold < min) produced a non-ascending ramp and the whole
 	// layer failed to paint. Clamp it inside the range, and nudge a degenerate
@@ -138,7 +139,7 @@ export function get_accessibility_layer_fill_color(
 	type: AccessibilityIndexType,
 	classification: string,
 	threshold: number
-) {
+): ExpressionSpecification {
 	return [
 		'case',
 		['==', ['feature-state', 'hover'], true],
@@ -149,7 +150,7 @@ export function get_accessibility_layer_fill_color(
 	];
 }
 
-export function get_accessibility_layer_fill_opacity() {
+export function get_accessibility_layer_fill_opacity(): ExpressionSpecification {
 	return ['interpolate', ['linear'], ['zoom'], 10, 1, 17, 0];
 }
 
@@ -188,8 +189,8 @@ export function build_greenareas_filter(
 	types?: number[],
 	min_size?: number,
 	names?: string[]
-): unknown[] | null {
-	const conditions: unknown[] = [];
+): FilterSpecification | null {
+	const conditions: FilterSpecification[] = [];
 
 	if (Array.isArray(types)) conditions.push(['in', ['get', 'osm_value'], ['literal', types]]);
 
@@ -201,6 +202,6 @@ export function build_greenareas_filter(
 	if (Array.isArray(names)) conditions.push(['in', ['get', 'osm_name'], ['literal', names]]);
 
 	// `null` clears the filter. An empty `['all']` would also match everything,
-	// but null is what Mapbox documents for "no filter" and keeps the style clean.
-	return conditions.length > 0 ? ['all', ...conditions] : null;
+	// but null is what MapLibre documents for "no filter" and keeps the style clean.
+	return conditions.length > 0 ? (['all', ...conditions] as FilterSpecification) : null;
 }

@@ -16,6 +16,13 @@ import { defineConfig } from 'vitest/config';
 */
 export default defineConfig({
 	plugins: [sveltekit()],
+	/*
+		MapLibre 6 runs its tile parsing in a MODULE worker that imports a shared
+		chunk. js/map.js loads it through `?worker&url`, which bundles that worker
+		together with its imports; 'es' keeps the output a module, matching the
+		`new Worker(url, { type: 'module' })` MapLibre constructs.
+	*/
+	worker: { format: 'es' },
 	test: {
 		include: ['src/**/*.{test,spec}.{js,ts}']
 	}

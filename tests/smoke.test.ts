@@ -9,8 +9,8 @@ const fixture = (name: string) => readFileSync(join(here, 'fixtures', `${name}.j
 
 /**
  * The app talks to the production PostgREST API through a hard-coded base URL, and
- * renders its basemap from Mapbox. Both are stubbed here so the smoke test is
- * hermetic: no network, no load on the live server, no Mapbox quota, and identical
+ * loads its basemap style from OpenFreeMap. Both are stubbed here so the
+ * smoke test is hermetic: no network, no load on the live server, and identical
  * results whether it runs on a laptop or in CI.
  *
  * `rpcCalls` records what the app *would* have fetched, which is what lets this test
@@ -43,29 +43,30 @@ async function stubBackend(page: Page) {
 		}
 	});
 
-	// A minimal but valid Mapbox style, so mapbox-gl fires `style.load` and `load`
-	// without reaching the network. Components gate their layers on those events.
-	await page.route('**/api.mapbox.com/**', async (route) => {
+	// A minimal but valid style, so MapLibre fires `style.load` and `load` without
+	// reaching the network. Components gate their layers on those events.
+	//
+	// The basemap is OpenFreeMap's dark style (src/js/map.js). Every request to
+	// that host is intercepted, the way api.mapbox.com's were before: the style
+	// gets an empty but valid one, so no tile or glyph request follows, and
+	// anything else is answered locally rather than reaching the network.
+	await page.route('**/tiles.openfreemap.org/**', async (route) => {
+		if (!route.request().url().includes('/styles/')) {
+			return route.fulfill({ status: 204, body: '' });
+		}
 		await route.fulfill({
 			contentType: 'application/json',
 			body: JSON.stringify({
 				version: 8,
 				sources: {},
 				layers: [],
-				// A non-empty glyphs URL: mapbox-gl rejects any `text-field` layer when
-				// the style declares none, and several layers here use one. Those
-				// validation errors were always emitted — the production build's
-				// console-drop was simply swallowing them before Vite 8 removed it.
-				glyphs: 'https://example.invalid/{fontstack}/{range}.pbf',
-				sprite: ''
+				// MapLibre rejects any `text-field` layer when the style declares no
+				// glyphs, and several data layers here use one. It must also be an
+				// ABSOLUTE URL: MapLibre 6 refuses relative glyph and sprite URLs.
+				glyphs: 'https://example.invalid/{fontstack}/{range}.pbf'
 			})
 		});
 	});
-	// Fulfilled rather than aborted: an aborted request surfaces as a console error,
-	// which would defeat the "no console errors" assertion below. The empty style has
-	// no sources, so no tiles are ever requested; only telemetry is.
-	await page.route('**/*.tiles.mapbox.com/**', (route) => route.fulfill({ status: 204, body: '' }));
-	await page.route('**/events.mapbox.com/**', (route) => route.fulfill({ status: 204, body: '' }));
 
 	return rpcCalls;
 }
@@ -116,7 +117,7 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.getByText('How', { exact: false }).first()).toBeVisible();
 		await expect(page.getByRole('button', { name: /Select a city/ })).toBeVisible();
 		// One map on the landing page: the globe.
-		await expect(page.locator('.mapboxgl-map')).toHaveCount(1);
+		await expect(page.locator('.maplibregl-map')).toHaveCount(1);
 	});
 
 	test('selecting a city opens Measure and paints the accessibility grid', async ({ page }) => {
@@ -132,7 +133,7 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.getByText('BE1', { exact: true }).first()).toBeVisible();
 		await expect(page.getByText('ESA', { exact: true }).first()).toBeVisible();
 
-		await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(1);
+		await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(1);
 		expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toHaveLength(0);
 
 		// Regression guard: the grid is fetched exactly once per city selection. It was
@@ -159,7 +160,7 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
 
 		// One route is mounted at a time, so one map.
-		await expect(page.locator('.mapboxgl-map')).toHaveCount(1);
+		await expect(page.locator('.maplibregl-map')).toHaveCount(1);
 
 		// Explore's 2.8 MB green-areas request must not happen until its tab is opened.
 		expect(rpcCalls).not.toContain('queryosmgreen');
@@ -197,7 +198,7 @@ test.describe('ATGreen smoke', () => {
 		// Deep link, cold: no click path reached this, the URL alone did.
 		await page.goto('/Turin/draw');
 		await expect(sectionLink(page, 'Draw')).toHaveAttribute('aria-current', 'page');
-		await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 20000 });
+		await expect(page.locator('.maplibregl-map')).toHaveCount(2, { timeout: 20000 });
 
 		// They are real links, so the URL follows the view...
 		await sectionLink(page, 'Explore').click();
@@ -220,7 +221,7 @@ test.describe('ATGreen smoke', () => {
 		// An unknown city explains itself instead of rendering an empty shell.
 		await page.goto('/atlantis/measure');
 		await expect(page.getByText(/No city called/)).toBeVisible();
-		await expect(page.locator('.mapboxgl-map')).toHaveCount(0);
+		await expect(page.locator('.maplibregl-map')).toHaveCount(0);
 	});
 
 	// Nothing in this suite would have failed while half the viewport was empty
@@ -230,12 +231,12 @@ test.describe('ATGreen smoke', () => {
 		test('the map fills its stage and no hidden panel holds space', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
-			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(1, { timeout: 20000 });
+			await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(1, { timeout: 20000 });
 
 			const box = await page.evaluate(() => {
 				const rail = document.querySelector('.rail')!.getBoundingClientRect();
 				const stage = document.querySelector('.stage')!.getBoundingClientRect();
-				const canvas = document.querySelector('canvas.mapboxgl-canvas')!.getBoundingClientRect();
+				const canvas = document.querySelector('canvas.maplibregl-canvas')!.getBoundingClientRect();
 				const tabs = document.querySelector('nav.sections')!.getBoundingClientRect();
 				return {
 					tabsBottom: tabs.bottom,
@@ -278,12 +279,12 @@ test.describe('ATGreen smoke', () => {
 		test('Draw gives both maps an equal half', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/draw');
-			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(2, { timeout: 20000 });
+			await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(2, { timeout: 20000 });
 
 			// The After column was `visibility:hidden` until a cell was picked, which
 			// still reserves its box — so Before was permanently half-width with
 			// nothing beside it.
-			const widths = await page.$$eval('canvas.mapboxgl-canvas', (els) =>
+			const widths = await page.$$eval('canvas.maplibregl-canvas', (els) =>
 				els.map((e) => e.getBoundingClientRect().width)
 			);
 			expect(widths).toHaveLength(2);
@@ -294,7 +295,7 @@ test.describe('ATGreen smoke', () => {
 		test('nothing overlaid on a map is stretched to the map itself', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/draw');
-			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(2, { timeout: 20000 });
+			await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(2, { timeout: 20000 });
 
 			// `.map-root > :global(div)` was meant to size the map's own container,
 			// but <slot /> renders into .map-root too, so the rule also handed
@@ -328,7 +329,7 @@ test.describe('ATGreen smoke', () => {
 			await stubBackend(page);
 			await page.setViewportSize({ width: 375, height: 812 });
 			await page.goto('/Turin/measure');
-			await expect(page.locator('canvas.mapboxgl-canvas')).toHaveCount(1, { timeout: 20000 });
+			await expect(page.locator('canvas.maplibregl-canvas')).toHaveCount(1, { timeout: 20000 });
 
 			// Stacked, not side by side: the rail spans the width and the stage sits
 			// below it. This is the branch the old `innerWidth > 500` checks covered
@@ -349,39 +350,39 @@ test.describe('ATGreen smoke', () => {
 			expect(box.stageTop).toBeGreaterThanOrEqual(box.railBottom - 2);
 		});
 
-		test('map CSS is served from this origin, not the Mapbox CDN', async ({ page }) => {
+		test('every stylesheet is served from this origin', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/');
-			await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 20000 });
+			await expect(page.locator('.maplibregl-map')).toHaveCount(1, { timeout: 20000 });
 
-			// The stub fulfils every **/api.mapbox.com/** request, so a missing
-			// stylesheet cannot fail any other assertion here — this one names the
-			// thing directly. The landing globe is the case that matters: it imported
-			// no CSS of its own and rendered only because app.html linked the CDN copy.
+			// The site's Content-Security-Policy is `style-src 'self'` plus whatever
+			// hosts it lists, so a stylesheet from anywhere else is at best a
+			// dependency on someone else's uptime and at worst blocked outright. The
+			// map library's CSS used to come from api.mapbox.com; it now ships in the
+			// bundle, and this pins that no stylesheet of any kind comes from off-site.
 			const sheets = await page.$$eval('link[rel=stylesheet]', (ls) =>
 				ls.map((l) => (l as HTMLLinkElement).href)
 			);
-			// Compare the parsed hostname, not a substring: `includes('api.mapbox.com')`
-			// also matches https://evil.example/api.mapbox.com and misses
-			// https://API.MAPBOX.COM. CodeQL flagged exactly this on the first version
-			// of this line, and it was right — substring-matching a URL is the wrong
-			// idiom even where, as here, the assertion is that none exist.
+			// Compare parsed origins, not substrings: CodeQL flagged a substring test
+			// on an earlier version of this line, and it was right — a URL containing
+			// a hostname is not the same as a URL on that host.
+			const here = new URL(page.url()).origin;
 			const external = sheets.filter((h) => {
 				try {
-					return new URL(h).hostname.toLowerCase() === 'api.mapbox.com';
+					return new URL(h, here).origin !== here;
 				} catch {
-					return false; // a relative or malformed href is not a third-party host
+					return false; // a malformed href is not a third-party host
 				}
 			});
 			expect(external, `third-party stylesheets: ${external.join(', ')}`).toHaveLength(0);
 
-			// Proof the stylesheet actually applied: Mapbox's corner containers are
+			// Proof the stylesheet actually applied: MapLibre's corner containers are
 			// absolutely positioned by it, and static without it.
 			const pos = await page.evaluate(() => {
-				const el = document.querySelector('.mapboxgl-ctrl-bottom-left');
+				const el = document.querySelector('.maplibregl-ctrl-bottom-left');
 				return el ? getComputedStyle(el).position : null;
 			});
-			expect(pos, 'mapbox control container position').toBe('absolute');
+			expect(pos, 'map control container position').toBe('absolute');
 		});
 
 		test('the index rows are grouped, reachable and operable by keyboard', async ({ page }) => {
@@ -449,7 +450,7 @@ test.describe('ATGreen smoke', () => {
 				// container. Keyboard access to per-cell data is a known open gap,
 				// tracked separately — excluding it here keeps the number meaningful
 				// rather than pinned to one unfixable element.
-				.exclude('.mapboxgl-canvas-container')
+				.exclude('.maplibregl-canvas-container')
 				.analyze();
 
 		test('the landing page stays within its violation budget', async ({ page }) => {
@@ -511,12 +512,12 @@ test.describe('ATGreen smoke', () => {
 	});
 
 	test('maps are torn down when their tab closes', async ({ page }) => {
-		// Counting .mapboxgl-map nodes does NOT test this: Svelte removes the DOM node
+		// Counting .maplibregl-map nodes does NOT test this: Svelte removes the DOM node
 		// whether or not map.remove() ran, so that assertion passes even with the
 		// teardown deleted (verified). What leaks is the WebGL context, which is
 		// invisible in the DOM.
 		//
-		// mapbox-gl's remove() releases the context via WEBGL_lose_context, which
+		// MapLibre's remove() releases the context via WEBGL_lose_context, which
 		// fires `webglcontextlost` on the canvas. Counting those events tests the
 		// mechanism rather than its shadow.
 		await page.addInitScript(() => {
@@ -545,15 +546,15 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
 		// Wait for the first map to settle before driving tabs: the loading overlay can
 		// still cover the tab bar at the moment the tiles become visible.
-		await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 20000 });
+		await expect(page.locator('.maplibregl-map')).toHaveCount(1, { timeout: 20000 });
 		await expect(page.locator('.bx--loading-overlay')).toHaveCount(0, { timeout: 20000 });
 
 		// Draw mounts two maps; leaving it must release both.
 		for (let i = 0; i < 2; i++) {
 			await sectionLink(page, 'Draw').click();
-			await expect(page.locator('.mapboxgl-map')).toHaveCount(2, { timeout: 15000 });
+			await expect(page.locator('.maplibregl-map')).toHaveCount(2, { timeout: 15000 });
 			await sectionLink(page, 'Measure').click();
-			await expect(page.locator('.mapboxgl-map')).toHaveCount(1, { timeout: 15000 });
+			await expect(page.locator('.maplibregl-map')).toHaveCount(1, { timeout: 15000 });
 		}
 
 		const lost = await page.evaluate(() => (window as unknown as { __ctxLost: number }).__ctxLost);

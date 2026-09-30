@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { refit_zoom } from '../../js/utils';
 	import { createEventDispatcher, onDestroy, onMount, setContext } from 'svelte';
-	import { get_default_map_props, key, mapbox } from '../../js/mapbox.js';
+	import { get_default_map_props, key, maplibregl } from '../../js/map.js';
 	import { current_city, hovered_feature } from '../../stores/stores.js';
 
 	const dispatch = createEventDispatcher();
@@ -10,7 +10,7 @@
 		dispatch('new_green_cell', { cellid: feature.properties.id, feature: feature });
 	}
 
-	function update_center(center: []) {
+	function update_center(center: maplibregl.LngLat) {
 		dispatch('update_center', { center: center });
 	}
 
@@ -18,7 +18,7 @@
 		dispatch('update_zoom', { zoom: current });
 	}
 
-	let map: mapbox.Map;
+	let map: maplibregl.Map;
 
 	export let mapLoaded = false;
 	export let styleLoaded = false;
@@ -31,9 +31,9 @@
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
 
-	let hovered_accessibility_cell_id = 0;
+	let hovered_accessibility_cell_id: string | number | undefined = 0;
 
-	const popup = new mapbox.Popup({
+	const popup = new maplibregl.Popup({
 		closeButton: false,
 		closeOnClick: false,
 		anchor: 'bottom'
@@ -49,7 +49,7 @@
 	});
 
 	function init() {
-		map = new mapbox.Map(
+		map = new maplibregl.Map(
 			get_default_map_props(container, $current_city.feature.geometry.coordinates)
 		);
 
@@ -75,7 +75,7 @@
 				update_zoom(map.getZoom());
 			});
 
-			map.on('mouseenter', ACCESSIBILITY_LAYER, (e: mapbox.MapMouseEvent) => {
+			map.on('mouseenter', ACCESSIBILITY_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 				if (!e.features || e.features.length <= 0) return;
 
 				map.getCanvas().style.cursor = 'pointer';
@@ -102,7 +102,15 @@
 					hovered_feature.set(current_feature);
 			});
 
-			map.on('mouseleave', () => {
+			/*
+				Was map.on('mouseleave', …) with no layer id. `mouseenter` and
+				`mouseleave` are LAYER events only — registered on the map itself this
+				listener never fired, under Mapbox or MapLibre, so leaving the map never
+				reset the cursor or removed the popup. Mapbox shipped no types, so
+				nothing said so; MapLibre's reject the call outright. The map-level
+				event is `mouseout`.
+			*/
+			map.on('mouseout', () => {
 				map.getCanvas().style.cursor = '';
 
 				popup.remove();
@@ -116,7 +124,7 @@
 				hovered_feature.set(null);
 			});
 
-			map.on('mousemove', ACCESSIBILITY_LAYER, (e: mapbox.MapMouseEvent) => {
+			map.on('mousemove', ACCESSIBILITY_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
 				if (!e.features || e.features.length <= 0) return;
 
 				map.getCanvas().style.cursor = 'pointer';
