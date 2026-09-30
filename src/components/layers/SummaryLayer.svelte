@@ -4,8 +4,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
+	import { apply_globe_style } from '../../js/globe_styles';
 	import { LABEL_FONT, maplibregl } from '../../js/map';
 	import { toCityPath } from '../../js/slug';
+	import { globe_style } from '../../stores/settings';
 
 	export let map: maplibregl.Map;
 	export let data: GeoJSON.FeatureCollection;
@@ -13,8 +15,8 @@
 
 	const empty_geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 	const SUMMARY_SOURCE = 'SUMMARY_SOURCE';
-	// The glow round each city. Also the hit target: a 2px dot is too small to
-	// point at, its halo is not.
+	// The hit target round each city, invisible until hovered: a 2px dot is too
+	// small to point at, this is not. Hovered, it glows green.
 	const SUMMARY_HALO = 'SUMMARY_HALO';
 	const SUMMARY_LAYER = 'SUMMARY_LAYER';
 	const CITY_LABEL_LAYER = 'CITY_LABEL_LAYER';
@@ -22,6 +24,8 @@
 	const hover: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'hover'], false];
 
 	let hovered_id: string | number | undefined;
+	// Stops whatever the globe style keeps running (the pings animation).
+	let stop_style = () => {};
 
 	// Names come underscore-separated from the API ("Los_Angeles").
 	const display_name = (name: string) => String(name ?? '').replaceAll('_', ' ');
@@ -54,10 +58,10 @@
 				type: 'circle',
 				source: SUMMARY_SOURCE,
 				paint: {
-					'circle-radius': ['interpolate', ['exponential', 1.75], ['zoom'], 1, 6, 10, 60],
+					'circle-radius': ['interpolate', ['exponential', 1.75], ['zoom'], 1, 7, 10, 60],
 					'circle-color': '#42be65',
 					'circle-blur': 1,
-					'circle-opacity': ['case', hover, 0.95, 0.4]
+					'circle-opacity': ['case', hover, 0.95, 0]
 				}
 			});
 
@@ -72,15 +76,24 @@
 						['exponential', 1.75],
 						['zoom'],
 						1,
-						['case', hover, 4, 1.8],
+						['case', hover, 4, 1.7],
 						10,
 						50
 					],
-					'circle-color': ['case', hover, '#ffffff', '#defbe6'],
-					'circle-stroke-color': 'rgba(4, 20, 10, 0.8)',
+					'circle-color': '#ffffff',
+					'circle-opacity': ['case', hover, 1, 0.85],
+					'circle-stroke-color': 'rgba(0, 0, 0, 0.6)',
 					'circle-stroke-width': 0.5
 				}
 			});
+
+		// The look chosen on the Settings page, built on the layers above.
+		stop_style = apply_globe_style(
+			map,
+			$globe_style,
+			{ source: SUMMARY_SOURCE, halo: SUMMARY_HALO, core: SUMMARY_LAYER, hover, cities: data },
+			matchMedia('(prefers-reduced-motion: reduce)').matches
+		);
 
 		// Names appear once the view is close enough to read them — during the
 		// flight into a city, or when a user zooms in.
@@ -111,8 +124,7 @@
 			A city on the globe is a link to that city. Selecting one is a
 			navigation, exactly like picking it in the search — this used to set
 			`current_city` and stop there, which since the move to URL routing
-			changed the header and nothing else. CitySelector's onNavigate flies
-			the globe in before the page changes.
+			changed the header and nothing else.
 		*/
 		map.on('click', SUMMARY_HALO, (e: maplibregl.MapLayerMouseEvent) => {
 			const name = e.features?.[0]?.properties?.name;
@@ -150,6 +162,7 @@
 	});
 
 	onDestroy(() => {
+		stop_style();
 		popup.remove();
 
 		// The parent map component may already have called map.remove(), after which

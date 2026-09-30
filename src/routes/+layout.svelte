@@ -136,6 +136,7 @@
 
 				<HeaderPanelDivider>AtGreen Project</HeaderPanelDivider>
 				<HeaderPanelLink href={resolve('/about')}>About</HeaderPanelLink>
+				<HeaderPanelLink href={resolve('/settings')}>Settings</HeaderPanelLink>
 				<HeaderPanelLink href="mailto:rossano.schifanella@unito.it">Contact us</HeaderPanelLink>
 			</HeaderPanelLinks>
 		</HeaderAction>

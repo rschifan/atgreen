@@ -40,6 +40,13 @@ MapLibre's atmosphere cannot be coloured, so the green glow, the sphere shading 
 the star field are CSS, placed from the globe's on-screen radius measured with
 `project()`.
 
+How the globe draws the Earth and its cities is a per-browser choice on the Settings
+page (`/settings`), defined in `src/js/globe_styles.ts`: Dot globe (the default), Firefly,
+Relief, City lights, Heat glow, Data spikes and Pings. The Dot globe hides the relief
+(so it is never downloaded) and draws land from `static/land-dots.json`, 8,400 points of
+a Fibonacci lattice kept where Natural Earth has land; `node scripts/land-dots.mjs`
+rebuilds it. The previews on the Settings page are `static/globe-styles/*.webp`.
+
 ## The trade-off, chosen deliberately
 
 - Every visitor's browser contacts OpenFreeMap as they pan, so it sees their IP address

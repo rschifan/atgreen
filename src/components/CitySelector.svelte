@@ -6,64 +6,39 @@
 	import Search from 'carbon-icons-svelte/lib/Search.svelte';
 	import { onMount } from 'svelte';
 	import type { Readable } from 'svelte/store';
-	import { onNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { findCityByParam } from '../js/slug';
+	import { globe_style } from '../stores/settings';
 	import Tutorial from './Tutorial.svelte';
 	import SummaryLayer from './layers/SummaryLayer.svelte';
 	import GlobleMap from './maps/GlobleMap.svelte';
-
-	type City = GeoJSON.Feature<GeoJSON.Point, { name: string }>;
 
 	export let active: boolean;
 	// The city list store (/rpc/getcitiesinfo): a FeatureCollection of points.
 	export let data: Readable<{ features: GeoJSON.Feature[] } | undefined>;
 
 	let map: maplibregl.Map;
-	let globe: GlobleMap;
 	let mapLoaded = false;
 	let styleLoaded = false;
 	let open = false;
-	// Set while the camera flies into a city: the text fades so the dive reads.
-	let leaving = false;
 	let userInteracting: boolean;
 	let hero: HTMLDivElement;
 	let hero_height = 0;
 
-	// Where the text ends, so on narrow screens the globe can start below it.
+	// Where the text ends, so the globe can be framed below it.
 	$: clear_top = hero && hero_height ? hero.offsetTop + hero_height : 0;
 
 	$: summary_data = $data?.features?.length ? ($data as GeoJSON.FeatureCollection) : undefined;
-	$: city_count = summary_data?.features.length;
 
 	// The header floats, translucent, over the globe — on this page only.
 	onMount(() => {
 		document.body.classList.add('landing');
 		return () => document.body.classList.remove('landing');
 	});
-
-	/*
-		Leaving the globe for a city — by clicking its dot or through the search —
-		flies the camera there first, so the city view arrives as a zoom into the
-		globe rather than a jump cut. SvelteKit holds the navigation until the
-		returned promise settles; fly_to() caps that wait itself.
-	*/
-	onNavigate(({ to, complete }) => {
-		const param = to?.params?.city;
-		const cities = (summary_data?.features ?? []) as City[];
-		const city = param ? findCityByParam(cities, param) : undefined;
-		if (!city || !globe) return;
-		leaving = true;
-		// A navigation cancelled mid-flight leaves this page up: bring the text back.
-		complete.catch(() => (leaving = false));
-		return globe.fly_to(city.geometry.coordinates as [number, number]);
-	});
 </script>
 
-<div class="landing" class:leaving>
+<div class="landing" data-globe-style={$globe_style}>
 	<div class="globe">
 		<GlobleMap
-			bind:this={globe}
 			bind:ref={map}
 			bind:mapLoaded
 			bind:styleLoaded
@@ -74,9 +49,6 @@
 	</div>
 
 	<div class="hero" bind:this={hero} bind:clientHeight={hero_height}>
-		<p class="eyebrow">
-			{city_count ? city_count.toLocaleString('en') : '1,000+'} cities · 145 countries
-		</p>
 		<h1>
 			How
 			<TooltipDefinition align="start">
@@ -100,17 +72,13 @@
 				>?</span
 			>
 		</h1>
-		<p class="lede">Walking access to green space, mapped neighbourhood by neighbourhood.</p>
 
 		<div class="actions">
 			<Button icon={Search} on:click={() => (active = true)}>Select a city</Button>
 			<Button kind="ghost" icon={Help} on:click={() => (open = true)}>How it works</Button>
 		</div>
 
-		<p class="hint">
-			<span class="dot" aria-hidden="true"></span>
-			Each dot is a city: hover for its name, click to open it.
-		</p>
+		<p class="hint">Or click a city on the globe.</p>
 	</div>
 
 	<p class="sources">
@@ -157,17 +125,15 @@
 		inset: 0;
 	}
 
-	/*
-		Wide screens: the text sits left of the globe. GlobleMap frames the globe
-		to the right at the same 1056px breakpoint (Carbon's `lg`).
-	*/
+	/* One centred column at every size: the question, then the globe below it. */
 	.hero {
 		position: absolute;
 		z-index: 1;
-		left: clamp(1.5rem, 6vw, 6rem);
-		top: 50%;
-		transform: translateY(-46%);
-		width: min(34rem, 38vw);
+		top: calc(3rem + clamp(1.5rem, 6vh, 3.5rem));
+		left: 50%;
+		transform: translateX(-50%);
+		width: min(46rem, calc(100% - 2rem));
+		text-align: center;
 		/* Drags on the empty parts of the column reach the globe. */
 		pointer-events: none;
 		text-shadow: 0 1px 18px rgba(0, 0, 0, 0.55);
@@ -176,18 +142,9 @@
 		pointer-events: auto;
 	}
 
-	.eyebrow {
-		margin: 0 0 1rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: #6fdc8c;
-	}
-
 	h1 {
 		margin: 0;
-		font-size: clamp(2.25rem, 3.6vw, 3.5rem);
+		font-size: clamp(1.875rem, 4vw, 3.25rem);
 		font-weight: 300;
 		line-height: 1.12;
 		letter-spacing: -0.01em;
@@ -207,67 +164,43 @@
 		color: #ffffff;
 	}
 
-	.lede {
-		margin: 1.25rem 0 0;
-		max-width: 31rem;
-		font-size: 1.125rem;
-		line-height: 1.55;
-		color: #c6c6c6;
-	}
-
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
+		justify-content: center;
 		gap: 0.75rem;
-		margin-top: 2rem;
+		margin-top: 1.75rem;
 		text-shadow: none;
 	}
 
 	.hint {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		margin: 2rem 0 0;
+		margin: 1rem 0 0;
 		font-size: 0.875rem;
 		line-height: 1.4;
 		color: #a8a8a8;
 	}
-	/* The same dot the globe draws, as its own legend. */
-	.dot {
-		flex: none;
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: #defbe6;
-		box-shadow: 0 0 8px 3px rgba(66, 190, 101, 0.7);
+
+	/* Where the data comes from, bottom left. */
+	.sources {
+		position: absolute;
+		z-index: 1;
+		left: 1.5rem;
+		bottom: 1rem;
+		margin: 0;
+		max-width: calc(100% - 26rem);
+		font-size: 0.75rem;
+		line-height: 1.4;
+		color: #8d8d8d;
+	}
+	.sources a {
+		color: #c6c6c6;
+	}
+	.sources a:hover {
+		color: #f4f4f4;
 	}
 
-	/* Narrow screens: the text on top, the globe rising from the bottom edge. */
+	/* The data line is on the About page; the globe needs the room here. */
 	@media (max-width: 1055.98px) {
-		.hero {
-			left: 1rem;
-			right: 1rem;
-			top: calc(3rem + clamp(1rem, 4vh, 2.5rem));
-			transform: none;
-			width: auto;
-			text-align: center;
-		}
-		h1 {
-			font-size: clamp(1.75rem, 7vw, 2.75rem);
-		}
-		.lede {
-			margin-inline: auto;
-			font-size: 1rem;
-		}
-		.actions {
-			justify-content: center;
-			margin-top: 1.5rem;
-		}
-		/*
-			The globe needs the room below the call to action. The data line is on
-			the About page; pointing at a dot needs a mouse.
-		*/
-		.hint,
 		.sources {
 			display: none;
 		}
@@ -281,6 +214,7 @@
 		font-weight: 400;
 		line-height: 1.4;
 		letter-spacing: 0;
+		text-align: left;
 		text-shadow: none;
 	}
 	.definition strong,
@@ -310,46 +244,14 @@
 		display: inline-flex;
 	}
 
-	/* Where the data comes from, bottom left on wide screens. */
-	.sources {
-		position: absolute;
-		z-index: 1;
-		left: clamp(1.5rem, 6vw, 6rem);
-		bottom: 1rem;
-		margin: 0;
-		max-width: calc(100% - 26rem);
-		font-size: 0.75rem;
-		line-height: 1.4;
-		color: #8d8d8d;
-	}
-	.sources a {
-		color: #c6c6c6;
-	}
-	.sources a:hover {
-		color: #f4f4f4;
-	}
-
-	.hero,
-	.sources {
-		transition: opacity 0.35s ease;
-	}
-	.leaving .hero,
-	.leaving .sources {
-		opacity: 0;
-		pointer-events: none;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.hero,
-		.sources {
-			transition: none;
-		}
-	}
-
-	/* The header, translucent over the sky while this page is mounted. */
+	/*
+		The header, translucent over the sky while this page is mounted. Tint only,
+		no backdrop-filter: a backdrop filter makes the header the containing block
+		of its fixed descendants, and Carbon's menu panel (fixed, height 100% − 3rem)
+		then resolved against the 48px bar and opened with no height at all.
+	*/
 	:global(body.landing .bx--header) {
-		background: rgba(6, 10, 16, 0.55);
+		background: rgba(6, 10, 16, 0.72);
 		border-bottom-color: rgba(255, 255, 255, 0.08);
-		-webkit-backdrop-filter: blur(12px);
-		backdrop-filter: blur(12px);
 	}
 </style>

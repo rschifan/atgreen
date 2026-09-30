@@ -135,21 +135,22 @@ test.describe('ATGreen smoke', () => {
 		const glow = await root.evaluate((el) => {
 			const cs = getComputedStyle(el);
 			const box = el.getBoundingClientRect();
+			const r = parseFloat(cs.getPropertyValue('--globe-r'));
 			return {
 				x: parseFloat(cs.getPropertyValue('--globe-x')) / box.width,
-				y: parseFloat(cs.getPropertyValue('--globe-y')) / box.height,
-				r: parseFloat(cs.getPropertyValue('--globe-r')),
+				top: box.top + parseFloat(cs.getPropertyValue('--globe-y')) - r,
+				r,
+				textBottom: (document.querySelector('.hero') as Element).getBoundingClientRect().bottom,
 				image: getComputedStyle(el, '::after').backgroundImage
 			};
 		});
 		expect(glow.image).toContain('radial-gradient');
-		// Wide screens frame the globe right of the text: centre two thirds across
-		// and half way down, radius 36% of the height (259 px at 1280x720). The
-		// bounds catch a unit or reference-frame mix-up.
-		expect(glow.x).toBeCloseTo(0.67, 1);
-		expect(glow.y).toBeCloseTo(0.5, 1);
-		expect(glow.r).toBeGreaterThan(200);
-		expect(glow.r).toBeLessThan(320);
+		// Centred left to right, starting below the text above it; a unit or
+		// reference-frame mix-up breaks one of these.
+		expect(glow.x).toBeCloseTo(0.5, 1);
+		expect(glow.top).toBeGreaterThan(glow.textBottom);
+		expect(glow.r).toBeGreaterThan(120);
+		expect(glow.r).toBeLessThan(400);
 	});
 
 	/*
@@ -171,9 +172,11 @@ test.describe('ATGreen smoke', () => {
 			await expect(page.locator('.map-root.lit')).toHaveCount(1, { timeout: 30000 });
 
 			// The fixture has one city, Turin. With the stubbed style the globe is
-			// transparent, so its dot's pale green core is the only such pixel there.
+			// transparent and the stars would show through it, so hide them: then its
+			// white dot is the only bright pixel on the globe (the rim is green).
 			// Polled: the dots are drawn a moment after the globe, once the city list
 			// has arrived.
+			await page.addStyleTag({ content: '.stars { display: none }' });
 			const findDot = async () => {
 				const png = (await page.screenshot()).toString('base64');
 				return page.evaluate(async (b64) => {
@@ -190,10 +193,10 @@ test.describe('ATGreen smoke', () => {
 					const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 					ctx.drawImage(img, 0, 0);
 					const px = ctx.getImageData(0, 0, img.width, img.height).data;
-					for (let y = Math.max(0, Math.round(gy - gr)); y < gy + gr; y++)
-						for (let x = Math.max(0, Math.round(gx - gr)); x < gx + gr; x++) {
+					for (let y = Math.max(0, Math.round(gy - gr * 0.95)); y < gy + gr * 0.95; y++)
+						for (let x = Math.max(0, Math.round(gx - gr * 0.95)); x < gx + gr * 0.95; x++) {
 							const i = (y * img.width + x) * 4;
-							if (px[i + 1] > 225 && px[i + 1] - px[i] > 15) return { x, y };
+							if (px[i] > 150 && px[i + 1] > 150 && px[i + 2] > 150) return { x, y };
 						}
 					return null;
 				}, png);
@@ -277,6 +280,44 @@ test.describe('ATGreen smoke', () => {
 		// to actually render something.
 		await expect(page.locator('#main-content')).not.toBeEmpty();
 		await expect(page.locator('nav.sections')).toBeVisible();
+	});
+
+	// The landing page's translucent header once carried a backdrop-filter, which
+	// made it the containing block of Carbon's fixed menu panel: the panel opened
+	// with zero height and clipped its links. `toBeVisible` does not see clipping
+	// by an ancestor, so this clicks — which fails when the map is on top.
+	test('the header menu opens on the landing page', async ({ page }) => {
+		await stubBackend(page);
+		await page.goto('/');
+		await page.locator('header button.bx--header__action').last().click();
+		await page.locator('header').getByRole('link', { name: 'About' }).click({ timeout: 5000 });
+		await page.waitForURL('**/about');
+	});
+
+	// The globe's look is a per-browser setting. The home page reads it once, when
+	// the globe loads, so the check is on the globe after the choice — and after a
+	// reload, which is what "saved" means.
+	test('the globe style chosen in Settings is used and remembered', async ({ page }) => {
+		await stubBackend(page);
+		await page.goto('/');
+		await expect(page.locator('div[data-globe-style]')).toHaveAttribute('data-globe-style', 'dots');
+
+		await page.locator('header button.bx--header__action').last().click();
+		await page.locator('header').getByRole('link', { name: 'Settings' }).click();
+		await page.waitForURL('**/settings');
+		await expect(page.locator('.bx--tile--selectable')).toHaveCount(7);
+
+		await page.getByText('Firefly', { exact: true }).click();
+		await page.getByRole('link', { name: 'See it on the globe' }).click();
+		await expect(page.locator('div[data-globe-style]')).toHaveAttribute(
+			'data-globe-style',
+			'firefly'
+		);
+		await page.reload();
+		await expect(page.locator('div[data-globe-style]')).toHaveAttribute(
+			'data-globe-style',
+			'firefly'
+		);
 	});
 
 	test('a section URL can be opened directly, shared and navigated back', async ({ page }) => {
