@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, setContext } from 'svelte';
 	import { BASEMAP_STYLE, key, maplibregl } from '../../js/map.js';
 	import { current_city } from '../../stores/stores.js';
+	import { globe_style } from '../../stores/settings';
 
 	onMount(() => {
 		init();
@@ -213,6 +214,9 @@
 				id: 'relief',
 				type: 'raster',
 				source: 'relief',
+				// The Dot globe draws land from its own points: start the relief hidden
+				// there, or its tiles download before the style gets to hide it.
+				layout: { visibility: $globe_style === 'dots' ? 'none' : 'visible' },
 				paint: {
 					'raster-brightness-max': 0.62,
 					'raster-saturation': 0.15,

@@ -129,7 +129,7 @@
 	.hero {
 		position: absolute;
 		z-index: 1;
-		top: calc(3rem + clamp(1.5rem, 6vh, 3.5rem));
+		top: calc(3rem + clamp(1rem, 4vh, 2.5rem));
 		left: 50%;
 		transform: translateX(-50%);
 		width: min(46rem, calc(100% - 2rem));
@@ -144,7 +144,8 @@
 
 	h1 {
 		margin: 0;
-		font-size: clamp(1.875rem, 4vw, 3.25rem);
+		/* One line on laptops and up (36px at most), so the globe keeps the room. */
+		font-size: clamp(1.5rem, 2.4vw, 2.25rem);
 		font-weight: 300;
 		line-height: 1.12;
 		letter-spacing: -0.01em;
@@ -169,12 +170,12 @@
 		flex-wrap: wrap;
 		justify-content: center;
 		gap: 0.75rem;
-		margin-top: 1.75rem;
+		margin-top: 1.25rem;
 		text-shadow: none;
 	}
 
 	.hint {
-		margin: 1rem 0 0;
+		margin: 0.75rem 0 0;
 		font-size: 0.875rem;
 		line-height: 1.4;
 		color: #a8a8a8;

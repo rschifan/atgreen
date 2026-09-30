@@ -1,62 +1,17 @@
 <script lang="ts">
-	import {
-		Content,
-		Header,
-		HeaderAction,
-		HeaderPanelDivider,
-		HeaderPanelLink,
-		HeaderPanelLinks,
-		HeaderUtilities,
-		SkipToContent
-	} from 'carbon-components-svelte';
-	import { TooltipDefinition } from 'carbon-components-svelte';
 	import { Column, Grid, Row } from 'carbon-components-svelte';
-	import { expoIn } from 'svelte/easing';
-
-	let isSideNavOpen = false;
-	let isOpen = false;
-	let selected = '0';
-	let transitions = {
-		'0': {
-			text: 'Default (duration: 200ms)',
-			value: { duration: 200 }
-		},
-		'1': {
-			text: 'Custom (duration: 600ms, delay: 50ms, easing: expoIn)',
-			value: { duration: 600, delay: 50, easing: expoIn }
-		},
-		'2': {
-			text: 'Disabled',
-			value: false
-		}
-	};
-
-	let ref;
-	let active;
-	let content_height;
 </script>
 
-<svelte:window bind:innerHeight={content_height} />
+<svelte:head>
+	<title>About — ATGreen</title>
+</svelte:head>
 
-<Header persistentHamburgerMenu={false} companyName="ATGreen" bind:isSideNavOpen>
-	<svelte:fragment slot="skip-to-content">
-		<SkipToContent />
-	</svelte:fragment>
-
-	<HeaderUtilities>
-		<HeaderAction bind:isOpen transition={transitions[selected].value}>
-			<HeaderPanelLinks>
-				<HeaderPanelLink href="/">Home</HeaderPanelLink>
-
-				<HeaderPanelDivider>AtGreen Project</HeaderPanelDivider>
-				<HeaderPanelLink href="about">About</HeaderPanelLink>
-				<HeaderPanelLink href="mailto:rossano.schifanella@unito.it">Contact us</HeaderPanelLink>
-			</HeaderPanelLinks>
-		</HeaderAction>
-	</HeaderUtilities>
-</Header>
-
-<Content>
+<!--
+	This page used to render a second Carbon <Header> of its own, fixed on top of
+	the app's: a different menu (Home, About, Contact) that hid the search and the
+	settings, and a second <main id="main-content">. The app header serves here too.
+-->
+<div class="about-page">
 	<Grid noGutter>
 		<Row>
 			<Column noGutter class="mobile-padding">
@@ -335,9 +290,20 @@
 			</Column></Row
 		>
 	</Grid>
-</Content>
+</div>
 
 <style>
+	/* A readable measure, centred. Carbon's rows carry -1rem side margins that
+	   would pull the text back to the window's edge. */
+	.about-page {
+		max-width: 52rem;
+		margin: 0 auto;
+		padding: 2rem 1.5rem 4rem;
+	}
+	.about-page :global(.bx--row) {
+		margin-inline: 0;
+	}
+
 	@media (min-width: 480px) {
 		:global(.mobile-padding) {
 			padding: 0rem 2rem;

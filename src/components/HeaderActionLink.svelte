@@ -31,15 +31,14 @@
 	rel={$$restProps.target === '_blank' ? 'noopener noreferrer' : undefined}
 	{...$$restProps}
 >
-	<svelte:component this={icon} />
+	<!-- 20px, like Carbon's own header actions beside it. -->
+	<svelte:component this={icon} size={20} />
 </a>
 
 <style>
 	.action-link {
-		text-align: center;
+		display: inline-flex;
 		align-items: center;
-		vertical-align: middle;
 		justify-content: center;
-		padding-top: 10px;
 	}
 </style>

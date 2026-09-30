@@ -302,13 +302,15 @@ test.describe('ATGreen smoke', () => {
 		await page.goto('/');
 		await expect(page.locator('div[data-globe-style]')).toHaveAttribute('data-globe-style', 'dots');
 
-		await page.locator('header button.bx--header__action').last().click();
-		await page.locator('header').getByRole('link', { name: 'Settings' }).click();
+		// The gear beside the search.
+		await page.getByRole('link', { name: 'Settings' }).first().click();
 		await page.waitForURL('**/settings');
 		await expect(page.locator('.bx--tile--selectable')).toHaveCount(7);
 
 		await page.getByText('Firefly', { exact: true }).click();
-		await page.getByRole('link', { name: 'See it on the globe' }).click();
+		// Back returns to the page Settings was opened from: here, the globe.
+		await page.getByRole('link', { name: 'Back' }).click();
+		await page.waitForURL(/\/$/);
 		await expect(page.locator('div[data-globe-style]')).toHaveAttribute(
 			'data-globe-style',
 			'firefly'
@@ -318,6 +320,22 @@ test.describe('ATGreen smoke', () => {
 			'data-globe-style',
 			'firefly'
 		);
+	});
+
+	// Every page reaches home through the name in the header, and Settings through
+	// the gear beside the search — including the About page, which once drew a
+	// second header of its own over the app's.
+	test('the header leads home and to Settings from any page', async ({ page }) => {
+		await stubBackend(page);
+		for (const path of ['/about', '/Turin/measure']) {
+			await page.goto(path);
+			await page.locator('header a.bx--header__name').click();
+			await page.waitForURL(/\/$/);
+			await page.goto(path);
+			await expect(page.locator('header.bx--header')).toHaveCount(1);
+			await page.getByRole('link', { name: 'Settings' }).first().click();
+			await page.waitForURL('**/settings');
+		}
 	});
 
 	test('a section URL can be opened directly, shared and navigated back', async ({ page }) => {
