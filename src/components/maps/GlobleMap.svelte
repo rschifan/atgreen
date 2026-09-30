@@ -71,17 +71,18 @@
 		typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	/*
-		Where the globe sits and how large it is on screen: centred, under the
-		text. Its top starts just below `clear_top`, where the text ends — measured
-		by CitySelector, because wrapping varies by device. Wide screens fit the
-		whole globe into the height that is left; on narrow ones the width caps it,
-		a little wider than the screen, so its sides run off the edges.
+		Where the globe sits and how large it is on screen: centred in the space
+		below the text, which ends at `clear_top` — measured by CitySelector,
+		because wrapping varies by device. Its radius is about 28% of the window
+		height, so it is the subject without crowding the page; on narrow screens
+		the width caps it, a little wider than the screen, so its sides run off.
 	*/
 	function framing(w: number, h: number) {
-		const radius = Math.max(80, Math.min(w * 0.62, (h - clear_top - 40) / 2));
-		// MapLibre centres the globe in the padded box, so its centre is at (h + top) / 2.
-		const centre = clear_top + 20 + radius;
-		return { padding: { left: 0, top: Math.max(0, 2 * centre - h), right: 0, bottom: 0 }, radius };
+		const free = h - clear_top;
+		const radius = Math.max(80, Math.min(w * 0.62, h * 0.28, free / 2 - 24));
+		// MapLibre centres the globe in the padded box, at (h + top) / 2; a top
+		// padding of clear_top puts it at the middle of the free space.
+		return { padding: { left: 0, top: clear_top, right: 0, bottom: 0 }, radius };
 	}
 
 	// The text above can wrap to a new height after the map has loaded.
