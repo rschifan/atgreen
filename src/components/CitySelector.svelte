@@ -107,22 +107,6 @@
 			<Button kind="ghost" icon={Help} on:click={() => (open = true)}>How it works</Button>
 		</div>
 
-		<section class="tools" aria-labelledby="tools-title">
-			<h2 id="tools-title">In each city</h2>
-			<dl>
-				<dt>Measure</dt>
-				<dd>where accessibility targets are met or missed</dd>
-				<dt>Compare</dt>
-				<dd>two indices side by side</dd>
-				<dt>Create</dt>
-				<dd>your own index and target</dd>
-				<dt>Draw</dt>
-				<dd>a new green area and see how access changes</dd>
-				<dt>Explore</dt>
-				<dd>green areas by type and size</dd>
-			</dl>
-		</section>
-
 		<p class="hint">
 			<span class="dot" aria-hidden="true"></span>
 			Each dot is a city: hover for its name, click to open it.
@@ -239,38 +223,6 @@
 		text-shadow: none;
 	}
 
-	/* What each section does: each line reads on from its verb ("Measure where…"). */
-	.tools {
-		margin-top: 2.25rem;
-		padding-top: 1.25rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.12);
-		text-shadow: none;
-	}
-	.tools h2 {
-		margin: 0 0 0.75rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		color: #a8a8a8;
-	}
-	.tools dl {
-		display: grid;
-		grid-template-columns: 5.5rem 1fr;
-		gap: 0.5rem 1rem;
-		margin: 0;
-		font-size: 0.875rem;
-		line-height: 1.4;
-	}
-	.tools dt {
-		font-weight: 600;
-		color: #f4f4f4;
-	}
-	.tools dd {
-		margin: 0;
-		color: #c6c6c6;
-	}
-
 	.hint {
 		display: flex;
 		align-items: center;
@@ -312,11 +264,9 @@
 			margin-top: 1.5rem;
 		}
 		/*
-			The globe needs the room below the call to action. The section list and
-			the data line are in "How it works" and on the About page; pointing at a
-			dot needs a mouse.
+			The globe needs the room below the call to action. The data line is on
+			the About page; pointing at a dot needs a mouse.
 		*/
-		.tools,
 		.hint,
 		.sources {
 			display: none;
