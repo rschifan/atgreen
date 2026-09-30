@@ -120,6 +120,34 @@ test.describe('ATGreen smoke', () => {
 		await expect(page.locator('.maplibregl-map')).toHaveCount(1);
 	});
 
+	test('the globe glows green, centred on it and sized to it', async ({ page }) => {
+		await stubBackend(page);
+		await page.goto('/');
+
+		// MapLibre's atmosphere has no colour setting, so the glow is a CSS
+		// gradient placed from project(). If `load` never fires or the measurement
+		// breaks, the glow is missing, or drawn somewhere the globe is not.
+		const root = page.locator('.map-root.lit');
+		await expect(root).toHaveCount(1, { timeout: 30000 });
+		const glow = await root.evaluate((el) => {
+			const cs = getComputedStyle(el);
+			const box = el.getBoundingClientRect();
+			return {
+				x: parseFloat(cs.getPropertyValue('--globe-x')) / box.width,
+				y: parseFloat(cs.getPropertyValue('--globe-y')) / box.height,
+				r: parseFloat(cs.getPropertyValue('--globe-r')),
+				image: getComputedStyle(el, '::after').backgroundImage
+			};
+		});
+		expect(glow.image).toContain('radial-gradient');
+		// Head-on (pitch is locked at 0), the globe sits at the centre of its box.
+		expect(glow.x).toBeCloseTo(0.5, 1);
+		expect(glow.y).toBeCloseTo(0.5, 1);
+		// About 110 px at zoom 0.5; the bounds catch a unit or frame mix-up.
+		expect(glow.r).toBeGreaterThan(50);
+		expect(glow.r).toBeLessThan(300);
+	});
+
 	test('selecting a city opens Measure and paints the accessibility grid', async ({ page }) => {
 		const rpcCalls = await stubBackend(page);
 		const consoleErrors: string[] = [];

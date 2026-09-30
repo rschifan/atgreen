@@ -14,6 +14,8 @@
 		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
 		// this matters more than when all six lived for the page's lifetime.
 		map?.remove();
+		// Also runs during server rendering, which has no cancelAnimationFrame.
+		if (glow_frame) cancelAnimationFrame(glow_frame);
 	});
 
 	let map: maplibregl.Map;
@@ -29,7 +31,11 @@
 		center: [2.1686, 41.390205],
 		zoom: 0.5,
 		bearing: 0,
-		pitch: 0
+		pitch: 0,
+		// The CSS glow is a circle, which is the globe's outline only when it is
+		// seen head-on. Tilted, the outline shifts off-centre and the ring would
+		// visibly slide off the edge.
+		maxPitch: 0
 		// No `projection` here: MapLibre takes it from the style, or from
 		// setProjection() once the style has loaded — see 'style.load' below.
 	};
@@ -46,6 +52,49 @@
 	let spinEnabled = true;
 	let width = 0;
 	let height = 0;
+	let root: HTMLDivElement;
+	let glow_frame = 0;
+
+	/*
+		The globe's radius ON SCREEN, measured rather than computed.
+
+		MapLibre sizes the globe as worldSize / 2π / cos(centre latitude), then
+		draws it through a perspective camera, so the visible disc is smaller
+		than that by an amount that depends on canvas height and field of view.
+		Rebuilding that here would copy MapLibre's internals and drift silently on
+		the next upgrade. Instead: project points along a great circle leaving the
+		centre, and keep the furthest — that point is the limb, at any zoom,
+		latitude or window size. project() ignores occlusion, so points past the
+		limb land back inside the disc rather than further out. Public API only.
+	*/
+	function measure_glow() {
+		glow_frame = 0;
+		if (!map || !root) return;
+		const c = map.getCenter();
+		const lat0 = (c.lat * Math.PI) / 180;
+		const o = map.project(c);
+		let r = 0;
+		for (let deg = 1; deg <= 100; deg++) {
+			const t = (deg * Math.PI) / 180;
+			// Due east from the centre along a great circle (bearing 90°).
+			const lat = Math.asin(Math.sin(lat0) * Math.cos(t));
+			const dlng = Math.atan2(
+				Math.sin(t) * Math.cos(lat0),
+				Math.cos(t) - Math.sin(lat0) * Math.sin(lat)
+			);
+			const p = map.project([c.lng + (dlng * 180) / Math.PI, (lat * 180) / Math.PI]);
+			const d = Math.hypot(p.x - o.x, p.y - o.y);
+			if (Number.isFinite(d)) r = Math.max(r, d);
+		}
+		root.style.setProperty('--globe-x', `${o.x.toFixed(1)}px`);
+		root.style.setProperty('--globe-y', `${o.y.toFixed(1)}px`);
+		root.style.setProperty('--globe-r', `${r.toFixed(1)}px`);
+	}
+
+	// At most once per frame: 'move' fires continuously while the globe spins.
+	function schedule_glow() {
+		if (!glow_frame) glow_frame = requestAnimationFrame(measure_glow);
+	}
 
 	$: userInteracting = $current_city ? true : false;
 
@@ -66,20 +115,24 @@
 			mapLoaded = true;
 
 			/*
-				MapLibre's equivalent of Mapbox's setFog. The green limb glow carries
-				over; the star field does not, because MapLibre has no
-				`star-intensity`. Space is left transparent instead, so the CSS star
-				field on .map-root shows through around the globe.
+				MapLibre's own atmosphere is switched OFF and the green glow is drawn
+				in CSS instead (.map-root.lit::after).
+
+				The atmosphere is a physical scattering model whose only inputs are the
+				sun's position and an opacity: it has no colour setting and is always
+				sky-blue. `horizon-color` does not help either — the sky shader fades
+				it out whenever the camera is above the thin atmosphere, which with the
+				whole globe in view it always is — so the green `horizon-color` this
+				first shipped with never showed. The sky stays transparent so the CSS
+				star field shows through round the globe.
 			*/
 			map.setSky({
 				'sky-color': 'rgba(22, 22, 22, 0)',
-				'horizon-color': '#006d2c',
-				'fog-color': '#161616',
-				'sky-horizon-blend': 0.5,
-				'horizon-fog-blend': 0.8,
-				'fog-ground-blend': 0.9,
-				'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 4, 0.6, 7, 0]
+				'atmosphere-blend': 0
 			});
+			measure_glow();
+			map.on('move', schedule_glow);
+			map.on('resize', schedule_glow);
 			map.on('mousedown', () => {
 				userInteracting = true;
 			});
@@ -155,7 +208,13 @@
 	$: if (width && map) map.resize();
 </script>
 
-<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
+<div
+	class="map-root"
+	class:lit={mapLoaded}
+	bind:this={root}
+	bind:clientWidth={width}
+	bind:clientHeight={height}
+>
 	<div id={container} class="map-canvas" />
 
 	{#if map}
@@ -207,5 +266,28 @@
 	.map-canvas {
 		width: 100%;
 		height: 100%;
+	}
+
+	/*
+		The green glow Mapbox drew with setFog: a bright rim at the globe's edge,
+		a haze fading inward over the globe and a halo fading out into space.
+		Centred on the globe and sized to its measured edge (--globe-*, set by
+		measure_glow), so it tracks zoom, drag and window size. Laid over the map
+		— outside the globe the canvas is transparent anyway — with pointer events
+		passing through. Shown only once the map has loaded and been measured.
+	*/
+	.map-root.lit::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			circle at var(--globe-x) var(--globe-y),
+			rgba(36, 161, 72, 0) calc(var(--globe-r) - 26px),
+			rgba(36, 161, 72, 0.3) calc(var(--globe-r) - 4px),
+			rgba(66, 190, 101, 0.95) var(--globe-r),
+			rgba(36, 161, 72, 0.4) calc(var(--globe-r) + 5px),
+			rgba(36, 161, 72, 0) calc(var(--globe-r) + 20px)
+		);
 	}
 </style>
