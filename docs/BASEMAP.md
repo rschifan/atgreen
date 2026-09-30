@@ -27,6 +27,19 @@ img-src     'self' data: blob: https://tiles.openfreemap.org
 Without it the basemap is blocked in production while working perfectly on the dev
 server, which has no CSP — the failure is invisible until deploy.
 
+## The landing globe
+
+The home page's globe is dressed differently from the city maps (`GlobleMap.svelte`):
+the basemap's roads, land use and labels are hidden, the oceans are deep blue, and the
+land is Natural Earth's shaded relief. OpenFreeMap serves that raster
+(`/natural_earth/ne2sr/{z}/{x}/{y}.png`) from the same host, so the CSP above covers it.
+The tiles are opaque with white oceans, so the relief sits under the vector water layer.
+Capped at zoom 2, the landing view downloads about 1 MB of relief, once per browser.
+
+MapLibre's atmosphere cannot be coloured, so the green glow, the sphere shading and
+the star field are CSS, placed from the globe's on-screen radius measured with
+`project()`.
+
 ## The trade-off, chosen deliberately
 
 - Every visitor's browser contacts OpenFreeMap as they pan, so it sees their IP address

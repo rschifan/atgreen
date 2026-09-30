@@ -1,9 +1,11 @@
 <script lang="ts">
 	import type * as GeoJSON from 'geojson';
 	import { onDestroy, onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	import { LABEL_FONT, maplibregl } from '../../js/map';
-	import { current_city } from '../../stores/stores';
+	import { toCityPath } from '../../js/slug';
 
 	export let map: maplibregl.Map;
 	export let data: GeoJSON.FeatureCollection;
@@ -11,58 +13,32 @@
 
 	const empty_geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 	const SUMMARY_SOURCE = 'SUMMARY_SOURCE';
+	// The glow round each city. Also the hit target: a 2px dot is too small to
+	// point at, its halo is not.
+	const SUMMARY_HALO = 'SUMMARY_HALO';
 	const SUMMARY_LAYER = 'SUMMARY_LAYER';
-
-	const SELECTED_CITY_SOURCE = 'SELECTED_CITY_SOURCE';
-	const SELECTED_CITY_LAYER = 'SELECTED_CITY_LAYER';
-	const SELECTED_CITY_LABEL_LAYER = 'SELECTED_CITY_LABEL_LAYER';
 	const CITY_LABEL_LAYER = 'CITY_LABEL_LAYER';
 
-	let hovered_accessibility_cell_id: string | number | undefined = 0;
-	let selected_cell_id: string | number | undefined;
-	let colors = ['#74c476', '#31a354', '#006d2c', 'white'];
+	const hover: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'hover'], false];
 
-	// const popup = new maplibregl.Popup({
-	// 	closeButton: false,
-	// 	closeOnClick: false
-	// });
+	let hovered_id: string | number | undefined;
 
-	// function reset_filters() {
-	// 	if (map && map.getLayer(SUMMARY_LAYER) && map.getLayer(GREENAREAS_LABELS_LAYER)) {
-	// 		map.setFilter(SUMMARY_LAYER, []);
-	// 		map.setFilter(GREENAREAS_LABELS_LAYER, []);
-	// 	}
-	// }
+	// Names come underscore-separated from the API ("Los_Angeles").
+	const display_name = (name: string) => String(name ?? '').replaceAll('_', ' ');
 
-	// $: if (selected_green_areas) {
-	// 	filter_by_name(selected_green_areas);
-	// }
+	// setText, never setHTML: the name comes from the database.
+	const popup = new maplibregl.Popup({
+		closeButton: false,
+		closeOnClick: false,
+		offset: 10,
+		className: 'city-tip'
+	});
 
-	// function filter_by_name(greenareas: []) {
-	// 	if (map && map.getLayer(SUMMARY_LAYER))
-	// 		map.setFilter(SUMMARY_LAYER, ['in', ['get', 'osm_name'], ['literal', greenareas]]);
-
-	// 	if (map && map.getLayer(GREENAREAS_LABELS_LAYER))
-	// 		map.setFilter(GREENAREAS_LABELS_LAYER, ['in', ['get', 'osm_name'], ['literal', greenareas]]);
-	// }
-
-	// $: if (data && data.features && data.features.length > 0) {
-	// 	const green_areas_source = map?.getSource<maplibregl.GeoJSONSource>(SUMMARY_SOURCE);
-	// 	if (green_areas_source) {
-	// 		green_areas_source.setData(data);
-	// 	}
-	// }
-
-	let selected_feature = undefined;
-	let unsubscribe_current_city: (() => void) | undefined;
-
-	function move_center(center) {
-		map.flyTo({
-			center: center,
-			zoom: 0.5,
-			essential: true,
-			animate: false
-		});
+	function set_hover(id: string | number | undefined) {
+		if (hovered_id !== undefined)
+			map.setFeatureState({ source: SUMMARY_SOURCE, id: hovered_id }, { hover: false });
+		hovered_id = id;
+		if (id !== undefined) map.setFeatureState({ source: SUMMARY_SOURCE, id }, { hover: true });
 	}
 
 	onMount(() => {
@@ -72,237 +48,109 @@
 				data: data ? data : empty_geojson
 			});
 
-		if (!map.getSource(SELECTED_CITY_SOURCE))
-			map.addSource(SELECTED_CITY_SOURCE, {
-				type: 'geojson',
-				data: empty_geojson
+		if (!map.getLayer(SUMMARY_HALO))
+			map.addLayer({
+				id: SUMMARY_HALO,
+				type: 'circle',
+				source: SUMMARY_SOURCE,
+				paint: {
+					'circle-radius': ['interpolate', ['exponential', 1.75], ['zoom'], 1, 6, 10, 60],
+					'circle-color': '#42be65',
+					'circle-blur': 1,
+					'circle-opacity': ['case', hover, 0.95, 0.4]
+				}
 			});
 
-		// if (!map.getLayer(SELECTED_CITY_LAYER))
-		// 	map.addLayer({
-		// 		id: SELECTED_CITY_LAYER,
-		// 		type: 'fill-extrusion',
-		// 		source: SELECTED_CITY_SOURCE,
-		// 		paint: {
-		// 			'fill-extrusion-base': 0,
-		// 			'fill-extrusion-color': 'red',
-		// 			'fill-extrusion-height': 1000000,
-		// 			'fill-extrusion-opacity': 1
-		// 		}
-		// 	});
+		if (!map.getLayer(SUMMARY_LAYER))
+			map.addLayer({
+				id: SUMMARY_LAYER,
+				type: 'circle',
+				source: SUMMARY_SOURCE,
+				paint: {
+					'circle-radius': [
+						'interpolate',
+						['exponential', 1.75],
+						['zoom'],
+						1,
+						['case', hover, 4, 1.8],
+						10,
+						50
+					],
+					'circle-color': ['case', hover, '#ffffff', '#defbe6'],
+					'circle-stroke-color': 'rgba(4, 20, 10, 0.8)',
+					'circle-stroke-width': 0.5
+				}
+			});
 
+		// Names appear once the view is close enough to read them — during the
+		// flight into a city, or when a user zooms in.
 		if (!map.getLayer(CITY_LABEL_LAYER))
 			map.addLayer({
 				id: CITY_LABEL_LAYER,
 				type: 'symbol',
 				source: SUMMARY_SOURCE,
-				minzoom: 2,
+				minzoom: 3.5,
 				layout: {
 					'text-field': ['get', 'name'],
 					'text-font': LABEL_FONT,
 					'text-justify': 'auto',
 					'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
+					'text-radial-offset': 0.6,
 					// Was a legacy `{ base, stops }` zoom function, deprecated in the style
 					// spec and rejected by MapLibre's types; this is the same curve.
 					'text-size': ['interpolate', ['exponential', 1.75], ['zoom'], 2, 12, 10, 20, 20, 30]
 				},
 				paint: {
-					'text-halo-width': 1,
-					'text-halo-color': 'black',
-					'text-color': 'white'
+					'text-halo-width': 1.2,
+					'text-halo-color': 'rgba(0, 0, 0, 0.85)',
+					'text-color': '#f4f4f4'
 				}
 			});
 
-		if (!map.getLayer(SELECTED_CITY_LABEL_LAYER))
-			map.addLayer(
-				{
-					id: SELECTED_CITY_LABEL_LAYER,
-					type: 'symbol',
-					source: SELECTED_CITY_SOURCE,
-					layout: {
-						'text-field': ['get', 'name'],
-						'text-font': LABEL_FONT,
-						'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
-						'text-justify': 'auto',
-						'text-size': 15,
-						// Offsets are in ems: 100 put the label ~1,600px from its anchor.
-						'text-offset': [1, 0]
-					},
-					paint: {
-						'text-halo-width': 8,
-						'text-halo-color': 'red',
-						'text-color': 'white'
-					}
-				},
-				CITY_LABEL_LAYER
-			);
-
-		if (!map.getLayer(SUMMARY_LAYER))
-			map.addLayer(
-				{
-					id: SUMMARY_LAYER,
-					type: 'circle',
-					source: SUMMARY_SOURCE,
-					paint: {
-						// Make circles larger as the user zooms from z12 to z22.
-						'circle-radius': ['interpolate', ['exponential', 1.75], ['zoom'], 1, 1.3, 10, 50],
-						// Color circles by ethnicity, using a `match` expression.
-						'circle-color': [
-							'case',
-							['==', ['feature-state', 'hover'], true],
-							'red',
-							['==', ['feature-state', 'selected'], true],
-							'red',
-							'white'
-						],
-
-						'circle-stroke-color': [
-							'case',
-							['==', ['feature-state', 'hover'], true],
-							'white',
-							['==', ['feature-state', 'selected'], true],
-							'white',
-							'black'
-						],
-						'circle-stroke-opacity': 1,
-						'circle-stroke-width': [
-							'case',
-							['==', ['feature-state', 'hover'], true],
-							2,
-							['==', ['feature-state', 'selected'], true],
-							2,
-							0.2
-						]
-					}
-				},
-				SELECTED_CITY_LABEL_LAYER
-			);
-
-		map.on('click', [SUMMARY_LAYER, CITY_LABEL_LAYER], (e) => {
-			if (e.features && e.features.length > 0) {
-				if (!map.getSource(SUMMARY_SOURCE)) return;
-
-				// popup?.remove();
-
-				let current_feature = e.features[0];
-				let clicked_cell_id = current_feature.id;
-
-				if (selected_cell_id)
-					map.setFeatureState(
-						{ source: SUMMARY_SOURCE, id: selected_cell_id },
-						{ selected: false }
-					);
-				selected_cell_id = clicked_cell_id;
-
-				map.setFeatureState({ source: SUMMARY_SOURCE, id: selected_cell_id }, { selected: true });
-
-				current_city.set({ text: current_feature.properties.name, feature: current_feature });
-
-				const center =
-					current_feature.geometry.type === 'Point'
-						? current_feature.geometry.coordinates
-						: undefined;
-				if (center) move_center(center);
-
-				selected_feature = current_feature;
-			}
+		/*
+			A city on the globe is a link to that city. Selecting one is a
+			navigation, exactly like picking it in the search — this used to set
+			`current_city` and stop there, which since the move to URL routing
+			changed the header and nothing else. CitySelector's onNavigate flies
+			the globe in before the page changes.
+		*/
+		map.on('click', SUMMARY_HALO, (e: maplibregl.MapLayerMouseEvent) => {
+			const name = e.features?.[0]?.properties?.name;
+			if (name) goto(resolve('/[city]/measure', { city: toCityPath(name) }));
 		});
 
-		map.on('mouseenter', [SUMMARY_LAYER, CITY_LABEL_LAYER], (e: maplibregl.MapLayerMouseEvent) => {
-			if (!e.features || e.features.length <= 0) return;
-			if (!map.getSource(SUMMARY_SOURCE)) return;
-
-			let current_feature = e.features[0];
-			let cell_id = current_feature.id;
-
+		map.on('mousemove', SUMMARY_HALO, (e: maplibregl.MapLayerMouseEvent) => {
+			const feature = e.features?.[0];
+			// Only on entering a new city: re-adding the popup on every mousemove
+			// would rebuild its DOM each time.
+			if (!feature || feature.id === hovered_id || !map.getSource(SUMMARY_SOURCE)) return;
+			/*
+				Hold the globe still under the pointer: no new spin (userInteracting),
+				and stop the one in progress. Otherwise the current one-second spin
+				step carries the dot out from under a still cursor while its name is
+				still showing, and the click lands on empty ground.
+			*/
+			userInteracting = true;
+			map.stop();
 			map.getCanvas().style.cursor = 'pointer';
-
-			if (hovered_accessibility_cell_id && hovered_accessibility_cell_id != 0) {
-				map.setFeatureState(
-					{ source: SUMMARY_SOURCE, id: hovered_accessibility_cell_id },
-					{ hover: false }
-				);
-			}
-			map.setFeatureState({ source: SUMMARY_SOURCE, id: cell_id }, { hover: true });
-
-			hovered_accessibility_cell_id = cell_id;
-
-			// update_popup(current_feature, e);
+			set_hover(feature.id);
+			if (feature.geometry.type === 'Point')
+				popup
+					.setLngLat(feature.geometry.coordinates as [number, number])
+					.setText(display_name(feature.properties?.name))
+					.addTo(map);
 		});
 
-		map.on('mouseleave', [SUMMARY_LAYER, CITY_LABEL_LAYER], (e: maplibregl.MapLayerMouseEvent) => {
+		map.on('mouseleave', SUMMARY_HALO, () => {
 			map.getCanvas().style.cursor = '';
-
-			if (map && map.getSource(SUMMARY_SOURCE))
-				map.setFeatureState(
-					{ source: SUMMARY_SOURCE, id: hovered_accessibility_cell_id },
-					{ hover: false }
-				);
-
-			hovered_accessibility_cell_id = 0;
-
-			// popup?.remove();
-		});
-
-		map.on('mousemove', SUMMARY_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
-			if (!e.features || e.features.length <= 0) return;
-			if (!map.getSource(SUMMARY_SOURCE)) return;
-
-			let current_feature = e.features[0];
-			let cell_id = current_feature.id;
-
-			if (hovered_accessibility_cell_id != 0) {
-				map.setFeatureState(
-					{ source: SUMMARY_SOURCE, id: hovered_accessibility_cell_id },
-					{ hover: false }
-				);
-			}
-			map.setFeatureState({ source: SUMMARY_SOURCE, id: cell_id }, { hover: true });
-			hovered_accessibility_cell_id = cell_id;
-		});
-
-		unsubscribe_current_city = current_city.subscribe((value) => {
-			if (value) {
-				if (!map.getSource(SUMMARY_SOURCE)) return;
-
-				const city = data.features.filter((el) => {
-					return el.properties.name == value.text;
-				});
-				if (city.length > 0) {
-					if (selected_feature)
-						map.setFeatureState(
-							{ source: SUMMARY_SOURCE, id: selected_feature.id },
-							{ selected: false }
-						);
-					selected_feature = city[0];
-
-					map.setFeatureState(
-						{ source: SUMMARY_SOURCE, id: selected_feature.id },
-						{ selected: true }
-					);
-
-					selected_cell_id = selected_feature.id;
-					move_center(selected_feature.geometry.coordinates);
-
-					// The point itself, not a 15 km buffer around it. The only layer
-					// reading this source is SELECTED_CITY_LABEL_LAYER, a symbol layer —
-					// and a symbol anchors a Point at the point and a Polygon at its
-					// centre, which for a buffer around that same point is the point. The
-					// fill-extrusion that would have drawn the polygon is commented out
-					// above. So the buffer changed nothing on screen and pulled
-					// @turf/buffer -> turf-jsts into the landing chunk: 375 KB raw,
-					// 85 KB gzipped, for a label position it did not move.
-					if (map && map.getSource(SELECTED_CITY_SOURCE))
-						map
-							.getSource<maplibregl.GeoJSONSource>(SELECTED_CITY_SOURCE)
-							?.setData(selected_feature);
-				}
-			}
+			if (map.getSource(SUMMARY_SOURCE)) set_hover(undefined);
+			popup.remove();
+			userInteracting = false;
 		});
 	});
 
 	onDestroy(() => {
-		if (unsubscribe_current_city) unsubscribe_current_city();
+		popup.remove();
 
 		// The parent map component may already have called map.remove(), after which
 		// every method below throws and takes the rest of the teardown with it. The
@@ -310,21 +158,33 @@
 		// Mapbox reads a two-argument off() as (type, listener), so a layer-id string
 		// matched no registered handler. map.remove() drops all of them at once.
 		try {
-			for (const layer of [SUMMARY_LAYER, CITY_LABEL_LAYER, SELECTED_CITY_LABEL_LAYER]) {
+			for (const layer of [CITY_LABEL_LAYER, SUMMARY_LAYER, SUMMARY_HALO]) {
 				if (map?.getLayer(layer)) map.removeLayer(layer);
 			}
-			for (const source of [SUMMARY_SOURCE, SELECTED_CITY_SOURCE]) {
-				if (map?.getSource(source)) map.removeSource(source);
-			}
+			if (map?.getSource(SUMMARY_SOURCE)) map.removeSource(SUMMARY_SOURCE);
 		} catch {
 			/* map already destroyed */
 		}
 	});
 </script>
 
-<!-- {#if data && data.features.length > 0}
-	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={FitToScreen} />
-{/if} -->
-
 <style>
+	/* The city name on hover: a small dark chip, readable over land and sea. */
+	:global(.city-tip .maplibregl-popup-content) {
+		padding: 0.375rem 0.625rem;
+		border-radius: 4px;
+		background: rgba(14, 20, 26, 0.92);
+		color: #f4f4f4;
+		font:
+			500 0.8125rem/1.2 'IBM Plex Sans',
+			'Helvetica Neue',
+			Arial,
+			sans-serif;
+		letter-spacing: 0.01em;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+		pointer-events: none;
+	}
+	:global(.city-tip .maplibregl-popup-tip) {
+		display: none;
+	}
 </style>
