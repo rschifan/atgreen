@@ -9,7 +9,7 @@ const fixture = (name: string) => readFileSync(join(here, 'fixtures', `${name}.j
 
 /**
  * The app talks to the production PostgREST API through a hard-coded base URL, and
- * loads its basemap style from /basemap/style.json. Both are stubbed here so the
+ * loads its basemap style from OpenFreeMap. Both are stubbed here so the
  * smoke test is hermetic: no network, no load on the live server, and identical
  * results whether it runs on a laptop or in CI.
  *
@@ -46,11 +46,14 @@ async function stubBackend(page: Page) {
 	// A minimal but valid style, so MapLibre fires `style.load` and `load` without
 	// reaching the network. Components gate their layers on those events.
 	//
-	// Production loads its basemap from /basemap/style.json on this origin (see
-	// src/js/map.js). Intercepting that one URL keeps every map test hermetic, the
-	// same way the api.mapbox.com stub did before — and because the style declares
-	// no sources, no tile, glyph-range or pmtiles request is ever made.
-	await page.route('**/basemap/style.json', async (route) => {
+	// The basemap is OpenFreeMap's dark style (src/js/map.js). Every request to
+	// that host is intercepted, the way api.mapbox.com's were before: the style
+	// gets an empty but valid one, so no tile or glyph request follows, and
+	// anything else is answered locally rather than reaching the network.
+	await page.route('**/tiles.openfreemap.org/**', async (route) => {
+		if (!route.request().url().includes('/styles/')) {
+			return route.fulfill({ status: 204, body: '' });
+		}
 		await route.fulfill({
 			contentType: 'application/json',
 			body: JSON.stringify({

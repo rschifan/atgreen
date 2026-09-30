@@ -36,8 +36,8 @@ rather than hard-coded, so adding one is a server-side change.
 
 ```
 browser ── SvelteKit (adapter-node, :4000) ── nginx ── PostgREST (:3002) ── PostgreSQL "esa"
-              Carbon components                │         /rpc/*          OSM · GHS-POP · ESA WorldCover
-              MapLibre GL JS                   └── /basemap/  Protomaps planet (.pmtiles), fonts, sprites
+              Carbon components                          /rpc/*          OSM · GHS-POP · ESA WorldCover
+              MapLibre GL JS ── basemap: OpenFreeMap (OSM vector tiles, no key)
 ```
 
 The frontend is a thin client: every indicator is computed in PostgreSQL and returned as

@@ -17,39 +17,34 @@ import * as maplibregl from 'maplibre-gl';
 // the first argument is not a string literal. Left alone, the production build
 // would request a worker that was never emitted and every map would stay blank.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { Protocol } from 'pmtiles';
 
 // Browser-only: the module is also evaluated during server rendering, where
-// there is no worker to configure and no network protocol to register.
+// there is no worker to configure.
 if (typeof window !== 'undefined') {
 	maplibregl.setWorkerUrl(workerUrl);
-	// Lets a style point at a single .pmtiles file served with ordinary HTTP
-	// range requests — no tile server, no API key.
-	maplibregl.addProtocol('pmtiles', new Protocol().tile);
 }
 
 /*
-	The basemap.
+	The basemap: OpenFreeMap's dark style (https://openfreemap.org).
 
-	Production reads a style from this origin, which points at a Protomaps planet
-	build and its fonts, self-hosted beside the app (see docs/BASEMAP.md). Same
-	origin is not just tidier: the site's Content-Security-Policy allows
-	`connect-src 'self'` plus Mapbox's own hosts and nothing else, so any
-	third-party tile host would be blocked in production and the map would render
-	blank. Self-hosting is also the only arrangement where no visitor's IP address
-	or viewport is sent to a third party — which matters for an EU public body.
+	OpenStreetMap vector tiles, free, with no API key, no account and no usage
+	limits. Everything — style, tiles, glyphs, sprites — comes from one host,
+	tiles.openfreemap.org, which the site's Content-Security-Policy has to allow
+	in connect-src and img-src; without that the basemap is blocked in
+	production while working fine on the dev server, which has no CSP.
 
-	Development uses OpenFreeMap's dark style instead: free, no key, no account,
-	and there is no CSP on the dev server. It exists so the app runs on a laptop
-	without a 100 GB file on disk.
+	The trade-off, chosen deliberately: every visitor's browser contacts
+	OpenFreeMap as they pan, and the service is donation-funded with no uptime
+	guarantee. If it is down, the basemap is down — the accessibility data is
+	drawn from this site's own /rpc/ and still renders. Self-hosting is the
+	alternative, measured at ~5.8 GB for street detail around every city plus
+	the world at globe zooms; docs/BASEMAP.md has the numbers.
 */
-export const BASEMAP_STYLE = import.meta.env.DEV
-	? 'https://tiles.openfreemap.org/styles/dark'
-	: '/basemap/style.json';
+export const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 
 /*
-	Glyph stack every data label uses. Both basemaps above serve Noto Sans
-	Regular. A symbol layer that names no font falls back to "Open Sans Regular,
+	Glyph stack every data label uses. OpenFreeMap serves Noto Sans Regular —
+	it is the one font its dark style uses. A symbol layer that names no font falls back to "Open Sans Regular,
 	Arial Unicode MS Regular" — Mapbox glyph names that neither open font set
 	provides — so its labels would render as nothing, with no error.
 */

@@ -7,7 +7,7 @@
 	import ToolPane from './ToolPane.svelte';
 	// Type-only. MapLibre ships its own type definitions, so type positions import
 	// straight from the package; value imports go through js/map, which registers
-	// the worker and the pmtiles protocol before any map is built.
+	// the map worker before any map is built.
 	import type * as maplibregl from 'maplibre-gl';
 	import {
 		Button,
