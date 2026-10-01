@@ -1,0 +1,115 @@
+/*
+	Global styles: Carbon (being replaced) and Tailwind for the shadcn-svelte
+	components (src/lib/components/ui).
+
+	Carbon's stylesheet goes into its own cascade layer, the lowest. Unlayered,
+	it would beat every Tailwind utility regardless of specificity — its reset
+	alone squares off every button — so the order below puts Carbon first and
+	lets the shadcn components' utilities win. The app's own component styles
+	stay unlayered and win over both, as before.
+
+	Tailwind's Preflight reset is left out while Carbon's reset still styles the
+	pages that have not moved yet: two resets would fight over every element.
+*/
+@layer carbon, theme, base, components, utilities;
+
+@import 'carbon-components-svelte/css/g100.css' layer(carbon);
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+/* The app is dark-only: <html class="dark"> turns on the components' dark: styles. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+	Tokens matched to Carbon's g100 greys, so a migrated page and a Carbon one
+	sit side by side without a seam; the app's green is the focus ring.
+*/
+:root {
+	--radius: 0.5rem;
+	--background: #161616;
+	--foreground: #f4f4f4;
+	--card: #1c1e20;
+	--card-foreground: #f4f4f4;
+	--popover: #1c1e20;
+	--popover-foreground: #f4f4f4;
+	--primary: #f4f4f4;
+	--primary-foreground: #161616;
+	--secondary: #262626;
+	--secondary-foreground: #f4f4f4;
+	--muted: #262626;
+	--muted-foreground: #a8a8a8;
+	--accent: #2b2e31;
+	--accent-foreground: #f4f4f4;
+	--destructive: #fa4d56;
+	--border: #393939;
+	--input: #393939;
+	--ring: #42be65;
+}
+
+@theme inline {
+	--font-sans: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+	--radius-sm: calc(var(--radius) - 4px);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) + 4px);
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+}
+
+/*
+	shadcn's own base styles, scoped to its parts (each carries a data-slot) so
+	they do not repaint Carbon's components: borders take the theme colour, and
+	focus rings the green.
+*/
+@layer base {
+	[data-slot],
+	[data-slot] * {
+		border-color: var(--color-border);
+		outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+	}
+
+	/*
+		The part of Tailwind's Preflight the components rely on, scoped to them:
+		form controls without the browser's own chrome. Without it a ghost button
+		kept the UA's #efefef face — grey text on a light box.
+	*/
+	button[data-slot],
+	[data-slot] button,
+	input[data-slot],
+	[data-slot] input {
+		margin: 0;
+		padding: 0;
+		border: 0 solid;
+		background-color: transparent;
+		color: inherit;
+		font: inherit;
+		letter-spacing: inherit;
+	}
+	[data-slot] img {
+		display: block;
+		max-width: 100%;
+	}
+	/* Carbon colours and underlines every link; a menu item or button that is a link does not. */
+	a[data-slot],
+	[data-slot] a {
+		color: inherit;
+		text-decoration: inherit;
+	}
+}

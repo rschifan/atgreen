@@ -274,7 +274,7 @@
 		of its fixed descendants, and Carbon's menu panel (fixed, height 100% − 3rem)
 		then resolved against the 48px bar and opened with no height at all.
 	*/
-	:global(body.landing .bx--header) {
+	:global(body.landing .app-header) {
 		background: rgba(6, 10, 16, 0.72);
 		border-bottom-color: rgba(255, 255, 255, 0.08);
 	}
