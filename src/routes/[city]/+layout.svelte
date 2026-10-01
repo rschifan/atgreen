@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { useRequest } from 'alova';
 	import { get_metadata } from '../../js/api';
-	import { findCityByParam, safeDecode, toCityPath } from '../../js/slug';
+	import { cityLabel, findCityByParam, safeDecode, toCityPath } from '../../js/slug';
 	import { TargetStoreImpl } from '../../js/types';
 	import { cities, current_city, metadata } from '../../stores/stores.js';
 
@@ -84,6 +84,8 @@
 	{:else if resolving}
 		<div class="notice"><p>Loading cities…</p></div>
 	{:else}
+		<!-- One h1 per page, as the title reads; the rail and the map show the rest. -->
+		<h1 class="sr-only">{cityLabel(feature.properties.name)} — {title(section)}</h1>
 		<slot />
 	{/if}
 </div>
