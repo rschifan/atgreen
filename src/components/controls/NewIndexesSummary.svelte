@@ -118,10 +118,10 @@
 		so colour is never the sole carrier of the value.
 	*/
 	function bar_colour(share: number): string {
-		if (!Number.isFinite(share)) return 'var(--cds-ui-04, #6f6f6f)';
-		if (share >= 0.9) return 'var(--cds-support-02, #24a148)';
-		if (share >= 0.6) return 'var(--cds-support-03, #f1c21b)';
-		return 'var(--cds-support-01, #da1e28)';
+		if (!Number.isFinite(share)) return 'var(--border-strong)';
+		if (share >= 0.9) return 'var(--success)';
+		if (share >= 0.6) return 'var(--warning)';
+		return 'var(--danger)';
 	}
 </script>
 
@@ -193,7 +193,7 @@
 	.group + .group {
 		margin-top: 0.75rem;
 		padding-top: 0.75rem;
-		border-top: 1px solid var(--cds-ui-03, #393939);
+		border-top: 1px solid var(--border);
 	}
 
 	/*
@@ -201,8 +201,8 @@
 		these said nothing the group headings do not already say, in a 300px column
 		where every line has to earn its place.
 
-		--cds-text-05 is the helper-text token (#8d8d8d, 5.5:1 on the rail).
-		--cds-text-03 is the PLACEHOLDER token (#6f6f6f) and fails WCAG 1.4.3 at
+		Muted text is --muted-foreground (#a8a8a8, 7.6:1 on the rail). Anything
+		dimmer, like Carbon's old placeholder grey (#6f6f6f), fails WCAG 1.4.3 at
 		this size — axe caught exactly that here once already.
 	*/
 	.group-head {
@@ -211,7 +211,7 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 	}
 
 	.rows {
@@ -255,11 +255,11 @@
 	}
 
 	.row:hover {
-		background-color: var(--cds-ui-01, #262626);
+		background-color: var(--secondary);
 	}
 
 	.row:focus-visible {
-		outline: 2px solid var(--cds-focus, #ffffff);
+		outline: 2px solid var(--ring);
 		outline-offset: -2px;
 	}
 
@@ -269,8 +269,8 @@
 		loudest thing on screen — louder than the map it exists to explain.
 	*/
 	.row.selected {
-		background-color: var(--cds-ui-01, #262626);
-		border-left-color: var(--cds-interactive-01, #0f62fe);
+		background-color: var(--secondary);
+		border-left-color: var(--primary);
 		cursor: default;
 	}
 
@@ -288,7 +288,7 @@
 	}
 
 	.rank {
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 	}
 
 	.sub {
@@ -296,7 +296,7 @@
 		margin-top: -0.1rem;
 		font-size: 0.72rem;
 		line-height: 1.35;
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 	}
 
 	.barwrap {
@@ -311,7 +311,7 @@
 		position: relative;
 		flex: 1;
 		height: 3px;
-		background-color: var(--cds-ui-03, #393939);
+		background-color: var(--border);
 	}
 
 	.bar i {
@@ -323,7 +323,7 @@
 	.pct {
 		min-width: 2.6em;
 		text-align: right;
-		color: var(--cds-text-02, #c6c6c6);
+		color: var(--subtle-foreground);
 	}
 
 	/* The bar is decorative; the figure beside it carries the value. */

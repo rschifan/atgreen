@@ -208,7 +208,7 @@
 		padding: 0.375rem 0.625rem;
 		border-radius: 4px;
 		background: rgba(14, 20, 26, 0.92);
-		color: #f4f4f4;
+		color: var(--foreground);
 		font:
 			500 0.8125rem/1.2 'IBM Plex Sans',
 			'Helvetica Neue',

@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { useWatcher } from 'alova';
-	import { MultiSelect, Search, Slider } from 'carbon-components-svelte';
+	import SearchIcon from '@lucide/svelte/icons/search';
+	import * as InputGroup from '$lib/components/ui/input-group/index.js';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { get_greenareas_osm } from '../js/api';
 	import { extent } from '../js/layers';
 	import { current_city } from '../stores/stores';
+	import { cityLabel } from '../js/slug';
 	import ExploreMap from './maps/ExploreMap.svelte';
 	import RailSection from './RailSection.svelte';
 	import ToolPane from './ToolPane.svelte';
+	import MultiSelectField from './fields/MultiSelectField.svelte';
+	import RangeField from './fields/RangeField.svelte';
 
 	let green_types = [
 		{ text: 'village_green', id: 0 },
@@ -33,17 +37,19 @@
 	let green_types_selected_ids: number[] = [];
 	let green_areas_names: string[] = [];
 	let current_search_text_value = '';
-	let selectedResultIndex = 0;
 	let current_minimum_size: number;
 	let results: string[] | undefined = [];
 	let data: { features: GreenFeature[] } | undefined;
 	let minv = 0;
 	let maxv = 0;
-	// Two bindings, two variables. `ref` was bound by both the Search box and
-	// ExploreMap, so the DOM node and the mapbox instance raced for one slot.
-	let search_ref: HTMLInputElement | null = null;
 	let map_ref: object;
-	let active = false;
+
+	// The OpenStreetMap values, as people read them: "recreation_ground" →
+	// "Recreation ground". The ids stay the numbers the map filters on.
+	$: type_items = green_types.map((t) => ({
+		id: String(t.id),
+		text: t.text[0].toUpperCase() + t.text.slice(1).replaceAll('_', ' ')
+	}));
 
 	let unsubscribe_greenareas_request: Unsubscriber;
 	let unsubscribe_greenareas_request_error: Unsubscriber;
@@ -59,20 +65,10 @@
 
 	$: lowerCaseValue = current_search_text_value.toLowerCase();
 
-	/*
-		Carbon's filterable MultiSelect shows the number of selected items in a tag
-		and nothing else — the control read as a bare "9" with no label anywhere
-		near it, because `titleText` is silently dropped for the filterable variant
-		and `Search` renders an empty label unless `labelText` is set. RailSection
-		supplies the heading; this says what the number counts.
-	*/
-	$: types_selected = green_types_selected_ids.length;
+	// The selector's button says what is selected; the hint is for the one state
+	// that needs explaining.
 	$: types_hint =
-		types_selected === 0
-			? 'Nothing selected — the map is empty'
-			: types_selected === green_types.length
-				? `All ${green_types.length} types`
-				: `${types_selected} of ${green_types.length} types`;
+		green_types_selected_ids.length === 0 ? 'Nothing selected — the map is empty.' : undefined;
 
 	$: if (data && data.features && data.features.length > 0) {
 		results = [];
@@ -130,53 +126,41 @@
 <ToolPane>
 	<svelte:fragment slot="rail">
 		{#if data && data.features && data.features.length > 0}
-			<RailSection title="Green area types" hint={types_hint}>
-				<!--
-					Ten values is where a dropdown earns its keep, so this one stays a
-					MultiSelect — and unlike Create's it was already wired correctly.
-				-->
-				<MultiSelect
-					filterable
-					selectedIds={green_types_selected_ids}
-					spellcheck="false"
-					placeholder="Add or remove types"
-					items={green_types}
-					on:select={(event) => {
-						green_types_selected_ids = event.detail.selectedIds;
-					}}
-				/>
-			</RailSection>
+			<MultiSelectField
+				title="Green area types"
+				items={type_items}
+				value={green_types_selected_ids.map(String)}
+				onchange={(v) => (green_types_selected_ids = v.map(Number))}
+				hint={types_hint}
+				searchPlaceholder="Search types…"
+			/>
 
-			<RailSection title="Minimum size">
-				<Slider
-					fullWidth
-					hideTextInput
-					step={1}
-					labelText="{current_minimum_size} ha and larger"
-					min={Math.floor(minv)}
-					max={Math.floor(maxv)}
-					minLabel={String(Math.floor(minv))}
-					maxLabel={String(Math.floor(maxv))}
-					bind:value={current_minimum_size}
-				/>
-			</RailSection>
+			<RangeField
+				title="Minimum size"
+				unit="ha"
+				min={Math.floor(minv)}
+				max={Math.floor(maxv)}
+				bind:value={current_minimum_size}
+			/>
 
-			<RailSection title="Find a place">
-				<Search
-					bind:ref={search_ref}
-					bind:active
-					bind:value={current_search_text_value}
-					bind:selectedResultIndex
-					{results}
-					size="lg"
-					labelText="Filter green areas by name"
-					placeholder="Filter by name"
-					autocomplete="on"
-				/>
+			<RailSection title="Find a place" for="explore-search">
+				<InputGroup.Root>
+					<InputGroup.Input
+						id="explore-search"
+						type="search"
+						placeholder="Filter by name"
+						autocomplete="off"
+						spellcheck="false"
+						bind:value={current_search_text_value}
+					/>
+					<InputGroup.Addon><SearchIcon /></InputGroup.Addon>
+				</InputGroup.Root>
 			</RailSection>
 
 			<p class="count">
-				{data.features.length.toLocaleString()} green areas in {$current_city?.text ?? 'this city'}
+				{data.features.length.toLocaleString('en')} green areas in {cityLabel(
+					$current_city?.text ?? ''
+				) || 'this city'}
 			</p>
 		{:else}
 			<p class="count">Loading green areas…</p>
@@ -197,6 +181,6 @@
 	.count {
 		margin: 0;
 		font-size: 0.8125rem;
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 	}
 </style>

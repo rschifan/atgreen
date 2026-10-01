@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ComboBox, ToastNotification } from 'carbon-components-svelte';
 	import ToolPane from './ToolPane.svelte';
+	import SelectField from './fields/SelectField.svelte';
 	import { format, geoMercator, geoPath, max, min, scaleThreshold, select, selectAll } from 'd3';
 	import { ckmeans } from 'simple-statistics';
 	import { afterUpdate, onDestroy, onMount } from 'svelte';
@@ -23,6 +23,9 @@
 		id,
 		text
 	}));
+	// Index B cannot be the index already chosen as A.
+	$: items_a = accessibility_indexes.map((i) => ({ value: String(i.id), label: i.text }));
+	$: items_b = items_a.map((i) => ({ ...i, disabled: Number(i.value) === selectedIdA }));
 
 	const props = {
 		nbreaks: 4,
@@ -446,31 +449,29 @@
 
 <ToolPane scroll>
 	<svelte:fragment slot="rail">
-		<ComboBox
-			titleText="Index A"
+		<SelectField
+			title="Index A"
 			placeholder="Select an accessibility index"
-			bind:selectedId={selectedIdA}
-			items={accessibility_indexes}
-			on:select={update}
+			items={items_a}
+			value={String(selectedIdA)}
+			onchange={(v) => {
+				selectedIdA = Number(v);
+				update();
+			}}
 		/>
-
-		<ComboBox
-			titleText="Index B"
+		<SelectField
+			title="Index B"
 			placeholder="Select an accessibility index"
-			bind:selectedId={selectedIdB}
-			items={accessibility_indexes}
-			shouldFilterItem={(item) => item.id != selectedIdA}
-			on:select={update}
+			items={items_b}
+			value={String(selectedIdB)}
+			error={same_index
+				? 'Pick an index other than A: an index compared with itself has nothing to show.'
+				: undefined}
+			onchange={(v) => {
+				selectedIdB = Number(v);
+				update();
+			}}
 		/>
-
-		{#if same_index}
-			<ToastNotification
-				lowContrast
-				kind="error"
-				title="Pick two different indexes"
-				subtitle="Comparing an index with itself has nothing to show."
-			/>
-		{/if}
 	</svelte:fragment>
 
 	<div bind:clientWidth={stageWidth} class="columns">
@@ -703,15 +704,5 @@
 		fill: red;
 		color: red;
 		background-color: brown;
-	}
-
-	:global(text#chart--alluvial-category-1) {
-		visibility: hidden;
-	}
-	:global(text#chart--alluvial-category-0) {
-		visibility: hidden;
-	}
-	:global(.cds--cc--alluvial rect.node) {
-		fill: gray;
 	}
 </style>

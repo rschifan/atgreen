@@ -2,7 +2,9 @@
 	import { onDestroy, onMount } from 'svelte';
 
 	import centroid from '@turf/centroid';
-	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
+	import ScanIcon from '@lucide/svelte/icons/scan';
+	import EyeIcon from '@lucide/svelte/icons/eye';
+	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
 	import { format } from 'd3';
 	import {
 		get_accessibility_layer_fill_color,
@@ -255,9 +257,9 @@
 		title={visibilityToggle ? 'Hide the accessibility layer' : 'Show the accessibility layer'}
 		action={setVisibilityLayer}
 		{map}
-		icon={visibilityToggle ? ViewOff : View}
+		icon={visibilityToggle ? EyeOffIcon : EyeIcon}
 	/>
-	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={FitToScreen} />
+	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={ScanIcon} />
 {/if}
 
 <style>

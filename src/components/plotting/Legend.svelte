@@ -257,7 +257,8 @@
 		position: absolute;
 		left: 1rem;
 		right: 1rem;
-		bottom: 1.5rem;
+		/* Clear of the map attribution, which spans a half-width map. */
+		bottom: 2.5rem;
 		margin: 0 auto;
 		max-width: 25rem;
 		border-radius: 5px;
@@ -280,7 +281,7 @@
 		font-weight: 600;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 	}
 
 	line:hover,

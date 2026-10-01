@@ -40,40 +40,12 @@
 		gap: 1.25rem;
 		padding: 1rem;
 		overflow-y: auto;
-		border-right: 1px solid var(--cds-ui-03, #393939);
+		border-right: 1px solid var(--border);
 	}
 
-	/*
-		Carbon's `.bx--form-item` is `flex: 1 1 auto`, so a Slider dropped straight
-		into a flex column stretches to fill it and pushes everything after it to
-		the bottom of the rail. The rail's own `gap` handles the spacing, so its
-		children size to content and Carbon's own margins are stood down.
-	*/
+	/* Each control sizes to its content; the rail's own gap does the spacing. */
 	.rail > :global(*) {
 		flex: 0 0 auto;
-	}
-
-	.rail :global(.bx--fieldset) {
-		margin-bottom: 0;
-	}
-
-	/*
-		Carbon sizes a ContentSwitcher for a content column, not a 300px rail: at
-		its default 0.875rem type and 1rem of padding per side, three switches get
-		~57px of text width each and "Exposure" and "Per person" render as
-		"Expos..." and "Per pe...". The labels are the whole control — there is no
-		other place in the UI that says which index you are looking at — so the
-		type and padding give way instead.
-	*/
-	.rail :global(.bx--content-switcher-btn) {
-		padding-inline: 0.5rem;
-		font-size: 0.75rem;
-		justify-content: center;
-	}
-
-	.rail :global(.bx--content-switcher__label) {
-		overflow: visible;
-		text-overflow: clip;
 	}
 
 	.stage {
@@ -95,7 +67,7 @@
 	}
 
 	/*
-		Below Carbon's `md` breakpoint the rail becomes a drawer above the stage.
+		Below 42rem (672px) the rail becomes a drawer above the stage.
 		This replaces ten `innerWidth > 500` branches in the pane components, which
 		bound `<svelte:window bind:innerWidth>` and so re-rendered every component
 		on every resize event — the reason Compare rebuilt all 26,440 of its SVG
@@ -110,7 +82,7 @@
 			flex: 0 0 auto;
 			max-height: 45%;
 			border-right: 0;
-			border-bottom: 1px solid var(--cds-ui-03, #393939);
+			border-bottom: 1px solid var(--border);
 		}
 	}
 </style>

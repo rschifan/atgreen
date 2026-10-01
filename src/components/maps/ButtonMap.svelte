@@ -1,56 +1,52 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
-	import { Button } from 'carbon-components-svelte';
+	/**
+	 * A button in a map's top-right control stack: an icon, named by its tooltip
+	 * and its accessible label. Every map control in the app is one of these.
+	 */
+	import { onDestroy, onMount, type Component } from 'svelte';
 	import type * as maplibregl from 'maplibre-gl';
+	import { buttonVariants } from '$lib/components/ui/button/index.js';
+	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 
-	let button: MapControl;
+	let {
+		map,
+		icon: Icon,
+		title,
+		action = () => {}
+	}: {
+		map: maplibregl.Map;
+		/** A @lucide/svelte icon. */
+		icon: Component;
+		title: string;
+		action?: () => void;
+	} = $props();
+
 	let container: HTMLDivElement;
+	// MapLibre takes any object with onAdd/onRemove; this one hands it the element below.
+	const control: maplibregl.IControl = { onAdd: () => container, onRemove: () => {} };
 
-	export let map: maplibregl.Map;
-	export let icon;
-	export let title: string;
-	export let action = () => {};
-
-	class MapControl {
-		onAdd() {
-			return container;
-		}
-
-		onRemove() {}
-	}
-
-	onMount(() => {
-		// console.log('MapControl - onMount');
-		button = new MapControl();
-		map.addControl(button, 'top-right');
-	});
+	onMount(() => map.addControl(control, 'top-right'));
 
 	onDestroy(() => {
 		// The parent map may already have been removed, in which case removeControl
 		// throws and takes the rest of the teardown with it.
 		try {
-			if (button) map?.removeControl(button);
+			map?.removeControl(control);
 		} catch {
 			/* map already destroyed */
 		}
 	});
 </script>
 
-<!-- <div bind:this={container} class="maplibregl-ctrl-group maplibregl-ctrl"> -->
 <div bind:this={container} class="maplibregl-ctrl">
-	<!-- <button class="maplibregl-ctrl-icon" on:click={action} {title}>
-		<slot />
-	</button> -->
-
-	<Button
-		size="small"
-		kind="secondary"
-		tooltipPosition="left"
-		iconDescription={title}
-		on:click={action}
-		{icon}
-	/>
+	<Tooltip.Root>
+		<Tooltip.Trigger
+			class={buttonVariants({ variant: 'secondary', size: 'icon' })}
+			aria-label={title}
+			onclick={action}
+		>
+			<Icon />
+		</Tooltip.Trigger>
+		<Tooltip.Content side="left">{title}</Tooltip.Content>
+	</Tooltip.Root>
 </div>
-
-<style>
-</style>
