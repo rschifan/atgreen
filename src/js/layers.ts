@@ -97,28 +97,55 @@ export function is_clamped_high(values: number[], threshold: number): boolean {
 }
 
 /**
- * The map's colour for one value, outside MapLibre: the same diverging ramp
- * around the target, between the same robust bounds, in the type's direction
- * and scale. The legend and the rail's distribution chart both use it, so
- * neither can drift from the map they explain.
+ * The three stops of an index's colour ramp, in the scale it is drawn in: the
+ * robust low end, the target, the robust high end.
+ *
+ * The target is a goal, not a property of the data, so it can lie outside the
+ * values: a city whose cells all beat it (Turin on ESA: even its worst-served
+ * 5% have 0.7 ha against a 0.5 ha target) or all miss it. Left there, the
+ * stops run backwards: MapLibre refuses to paint such a ramp, and d3 maps every
+ * value to one end, which drew Turin's 99% as a red chart.
+ *
+ * So the range is widened to take in the target. Clamping the target into the
+ * range instead, as the map once did, put the lowest value on the red end even
+ * when it beat the target. Widened, the colours still turn exactly at the
+ * target, as the legend says; a degenerate range is nudged apart.
+ *
+ * The map, its legend and the rail's chart all take their stops from here.
+ */
+export function ramp_stops(
+	values: number[],
+	threshold: number,
+	classification: string
+): [number, number, number] {
+	const { min, max } = robust_bounds(values, threshold);
+	const target = to_scale(threshold, classification);
+	return spread(
+		Math.min(to_scale(min, classification), target),
+		target,
+		Math.max(to_scale(max, classification), target)
+	);
+}
+
+/**
+ * The map's colour for one value, outside MapLibre: the same ramp, from the
+ * same stops, in the type's direction. The legend and the rail's chart use it.
  */
 export function ramp_color(
 	values: number[],
 	threshold: number,
 	type: AccessibilityIndexType
 ): (value: number) => string {
-	const log = INDEX_CLASSIFICATION[type] === ClassificationScheme.LOGARITHMIC;
-	const scaled = (x: number) => (log ? (x <= 0 ? 0 : Math.log(x)) : x);
-	const { min, max } = robust_bounds(values, threshold);
+	const classification = INDEX_CLASSIFICATION[type];
 	const scale = scaleDiverging<string>()
-		.domain([scaled(min), scaled(threshold), scaled(max)])
+		.domain(ramp_stops(values, threshold, classification))
 		.range(
 			type === AccessibilityIndexType.MINIMUM_DISTANCE
 				? [ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED]
 				: [ACOLOR_RED, ACOLOR_MID, ACOLOR_GREEN]
 		)
 		.clamp(true);
-	return (value) => scale(scaled(value));
+	return (value) => scale(to_scale(value, classification));
 }
 
 export function get_colormap_rule(
@@ -133,17 +160,8 @@ export function get_colormap_rule(
 	// this was a cliff roughly one large city away, presenting as a blank map.
 	// Outliers clamped off: see robust_bounds. The legends call the same helper,
 	// so the ramp on the map and the ramp in the legend cannot disagree.
-	const { min, max } = robust_bounds(data, threshold);
-
-	const low = to_scale(min, classification);
-	const high = to_scale(max, classification);
-	// MapLibre requires strictly ascending stops. The threshold is a target, not a
-	// property of the data, so a city whose values all beat it (max < threshold) or
-	// all miss it (threshold < min) produced a non-ascending ramp and the whole
-	// layer failed to paint. Clamp it inside the range, and nudge a degenerate
-	// range apart so min < mid < max always holds.
-	const mid = Math.min(Math.max(to_scale(threshold, classification), low), high);
-	const [a, b, c] = spread(low, mid, high);
+	// Strictly ascending, as MapLibre requires: see ramp_stops.
+	const [a, b, c] = ramp_stops(data, threshold, classification);
 
 	return [
 		'interpolate',
