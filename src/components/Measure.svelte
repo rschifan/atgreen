@@ -4,7 +4,7 @@
 	import { get } from 'svelte/store';
 	import AccessibilityLayer from './layers/AccessibilityLayer.svelte';
 	import BaseMap from './maps/BaseMap.svelte';
-	import NewIndexesSummary from './controls/NewIndexesSummary.svelte';
+	import IndexScorecard from './controls/IndexScorecard.svelte';
 	import IndexExplanationLayer from './layers/IndexExplanationLayer.svelte';
 	import Legend from './plotting/Legend.svelte';
 	import ToolPane from './ToolPane.svelte';
@@ -28,7 +28,7 @@
 
 <ToolPane>
 	<svelte:fragment slot="rail">
-		<NewIndexesSummary {metadata} />
+		<IndexScorecard {metadata} />
 	</svelte:fragment>
 
 	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded />

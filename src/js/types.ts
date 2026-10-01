@@ -188,56 +188,6 @@ export class TargetStoreImpl {
 	}
 }
 
-export class CityStoreImpl {
-	city: string;
-	indexes: Map<string, number>;
-	deciles: Map<string, number[]>;
-	percentile: Map<string, number>;
-
-	constructor(city: string) {
-		this.city = city;
-		this.indexes = new Map<string, number>();
-		this.deciles = new Map<string, number[]>();
-		this.percentile = new Map<string, number>();
-	}
-
-	addIndex(key: string, value: number) {
-		this.indexes.set(key, value);
-	}
-
-	getIndex(key: string): number | undefined {
-		return this.indexes.get(key);
-	}
-
-	addIndexDeciles(key: string, deciles: number[]) {
-		this.deciles.set(key, deciles);
-	}
-
-	getIndexDeciles(key: string): number[] | undefined {
-		return this.deciles.get(key);
-	}
-
-	addIndexPercentile(key: string, value: number) {
-		this.percentile.set(key, value);
-	}
-
-	getPercentile(key: string): number | undefined {
-		return this.percentile.get(key);
-	}
-
-	keys(): string[] {
-		return [...this.indexes.keys()];
-	}
-
-	values(): number[] {
-		return [...this.indexes.values()];
-	}
-
-	entries(): [string, number][] {
-		return [...this.indexes.entries()];
-	}
-}
-
 /**
  * What each family of index actually asks.
  *
@@ -263,17 +213,13 @@ export const INDEX_GROUP_ORDER: AccessibilityIndexType[] = [
 ];
 
 /**
- * A one-line statement of what an index requires, built from the RPC's own
- * fields rather than from prose.
+ * What an index requires, in the few characters a rail row has: built from the
+ * RPC's own fields rather than from prose. The group heading says the rest
+ * ("Green per person").
  *
- *   WHO -> "≥0.5 ha within 5 min"
- *   IPP -> "9 m² per person within 30 min"
- *   ESA -> "0.5 ha within 5 min"
- *
- * The rail used to show eight bare acronyms and explain only the selected one,
- * so seven of the eight were unexplained at any moment. `target.description` is
- * a full sentence — too long for a row — and these three fields say the same
- * thing in the space available.
+ *   WHO -> "≥0.5 ha · 5 min"
+ *   IPP -> "9 m² · 30 min"
+ *   ESA -> "0.5 ha · 5 min"
  */
 export function describe_index_target(target: {
 	threshold: number;
@@ -284,11 +230,11 @@ export function describe_index_target(target: {
 
 	switch (index.type) {
 		case AccessibilityIndexType.MINIMUM_DISTANCE:
-			return `≥${index.size} ha within ${threshold} min`;
+			return `≥${index.size} ha · ${threshold} min`;
 		case AccessibilityIndexType.PER_PERSON:
-			return `${threshold} m² per person within ${index.distance} min`;
+			return `${threshold} m² · ${index.distance} min`;
 		case AccessibilityIndexType.EXPOSURE:
-			return `${threshold} ha within ${index.distance} min`;
+			return `${threshold} ha · ${index.distance} min`;
 		default:
 			return '';
 	}
@@ -353,4 +299,78 @@ export const OSM_GREEN_TYPES = [
 export function green_type_label(id: number): string {
 	const t = OSM_GREEN_TYPES[id];
 	return t ? t[0].toUpperCase() + t.slice(1).replaceAll('_', ' ') : '';
+}
+
+type TargetLike = {
+	threshold: number;
+	index: { type: AccessibilityIndexType; size: number; distance: number };
+};
+
+/**
+ * The same requirement as a sentence, to follow "8% of residents": what the
+ * index asks every resident to have.
+ */
+export function describe_index_goal({ threshold, index }: TargetLike): string {
+	switch (index.type) {
+		case AccessibilityIndexType.MINIMUM_DISTANCE:
+			return `have a green area of at least ${index.size} ha within a ${threshold}-minute walk.`;
+		case AccessibilityIndexType.PER_PERSON:
+			return `have ${threshold} m² of public green each within a ${index.distance}-minute walk.`;
+		default:
+			return `have at least ${threshold} ha of green of any kind within a ${index.distance}-minute walk.`;
+	}
+}
+
+/**
+ * Where the city's median resident stands, from the 20 steps of
+ * /rpc/getsummarybycity's `d` (each 5% of residents, worst served first).
+ */
+export function describe_median({ threshold, index }: TargetLike, steps: number[]): string {
+	if (steps.length < 2) return '';
+	const median =
+		(steps[Math.floor((steps.length - 1) / 2)] + steps[Math.ceil((steps.length - 1) / 2)]) / 2;
+	const unit = INDEX_UNIT[index.type];
+	if (index.type !== AccessibilityIndexType.MINIMUM_DISTANCE)
+		return `The median resident has ${readable(median)} ${unit}; the target is ${threshold} ${unit}.`;
+	if (median === 0) return 'Half the residents have one inside their own cell.';
+	return median > threshold
+		? `Half the residents walk more than ${readable(median)} min to one.`
+		: `Half the residents have one within ${readable(median)} min.`;
+}
+
+/**
+ * A city's standing among all cities, in words. The API's percentile `p` is the
+ * share of cities doing BETTER (Turin's 75% on WHO is p 16; Khujand's 8% is
+ * p 91), which the rail used to print as an ordinal: "16th" read as poor and
+ * "91st" as good, the opposite of what they mean.
+ */
+export function standing(p: number): { label: string; tone: 'good' | 'bad' | undefined } {
+	if (p <= 50) return { label: `Top ${Math.max(1, p)}%`, tone: p <= 25 ? 'good' : undefined };
+	return { label: `Bottom ${100 - p}%`, tone: p >= 75 ? 'bad' : undefined };
+}
+
+/** One index's result for a city, from /rpc/getsummarybycity. */
+export type IndexResult = {
+	/** Share of residents who meet the target, 0–1. */
+	v: number;
+	/** Share of cities doing better, 0–100. */
+	p: number;
+	/** The city's values in 20 steps of 5% of residents, worst served first. */
+	d: number[];
+};
+
+/** The RPC sends `d` as the text of a Postgres array, "[11.0, 7.6, …]". */
+export function parse_profile(
+	raw: Record<string, { v: number | string; p: number | string; d: string | number[] }> | null
+): Record<string, IndexResult> {
+	const out: Record<string, IndexResult> = {};
+	for (const [name, r] of Object.entries(raw ?? {})) {
+		const d = Array.isArray(r.d)
+			? r.d
+			: String(r.d)
+					.replace(/[[\]{}]/g, '')
+					.split(',');
+		out[name] = { v: Number(r.v), p: Number(r.p), d: d.map(Number).filter(Number.isFinite) };
+	}
+	return out;
 }

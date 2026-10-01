@@ -1,6 +1,7 @@
 import type { ExpressionSpecification, FilterSpecification } from 'maplibre-gl';
+import { scaleDiverging } from 'd3';
 import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from './colors';
-import { ClassificationScheme, AccessibilityIndexType } from './types';
+import { ClassificationScheme, AccessibilityIndexType, INDEX_CLASSIFICATION } from './types';
 
 export function get_target_rule(operator: string, threshold: number) {
 	return [operator, ['get', 'v'], threshold];
@@ -93,6 +94,31 @@ export function is_clamped_high(values: number[], threshold: number): boolean {
 	const finite = values.filter((v) => Number.isFinite(v));
 	if (finite.length === 0) return false;
 	return robust_bounds(finite, threshold).max < Math.max(...finite);
+}
+
+/**
+ * The map's colour for one value, outside MapLibre: the same diverging ramp
+ * around the target, between the same robust bounds, in the type's direction
+ * and scale. The legend and the rail's distribution chart both use it, so
+ * neither can drift from the map they explain.
+ */
+export function ramp_color(
+	values: number[],
+	threshold: number,
+	type: AccessibilityIndexType
+): (value: number) => string {
+	const log = INDEX_CLASSIFICATION[type] === ClassificationScheme.LOGARITHMIC;
+	const scaled = (x: number) => (log ? (x <= 0 ? 0 : Math.log(x)) : x);
+	const { min, max } = robust_bounds(values, threshold);
+	const scale = scaleDiverging<string>()
+		.domain([scaled(min), scaled(threshold), scaled(max)])
+		.range(
+			type === AccessibilityIndexType.MINIMUM_DISTANCE
+				? [ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED]
+				: [ACOLOR_RED, ACOLOR_MID, ACOLOR_GREEN]
+		)
+		.clamp(true);
+	return (value) => scale(scaled(value));
 }
 
 export function get_colormap_rule(
