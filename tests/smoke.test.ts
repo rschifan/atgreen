@@ -340,6 +340,7 @@ test.describe('ATGreen smoke', () => {
 		await page.goto('/Turin/draw');
 		await expect(sectionLink(page, 'Draw')).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.maplibregl-map')).toHaveCount(2, { timeout: 20000 });
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Turin — Draw');
 
 		// They are real links, so the URL follows the view...
 		await sectionLink(page, 'Explore').click();
