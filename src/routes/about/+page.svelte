@@ -1,6 +1,3 @@
-<script lang="ts">
-</script>
-
 <svelte:head>
 	<title>About — ATGreen</title>
 </svelte:head>
@@ -12,6 +9,7 @@
 -->
 <div class="about-page">
 	<article class="about-body">
+		<h1 class="sr-only">About ATGreen</h1>
 		<!-- <h3>Project</h3> -->
 
 		<span class="focus-text">
@@ -245,10 +243,18 @@
 
 		<p>The project have been developed and supported by:</p>
 
-		<div class="logo"><a href="http://unito.it"><img src="unito.png" alt="" /></a></div>
-		<div class="logo"><a href="https://isi.it/en/home"><img src="isi.png" alt="" /></a></div>
-		<div class="logo"><a href="https://www.bsc.es/"><img src="bsc.png" alt="" /></a></div>
-		<div class="logo"><a href="https://gogreenroutes.eu/"><img src="ggr.png" alt="" /></a></div>
+		<div class="logo">
+			<a href="http://unito.it"><img src="unito.png" alt="University of Turin" /></a>
+		</div>
+		<div class="logo">
+			<a href="https://isi.it/en/home"><img src="isi.png" alt="ISI Foundation" /></a>
+		</div>
+		<div class="logo">
+			<a href="https://www.bsc.es/"><img src="bsc.png" alt="Barcelona Supercomputing Center" /></a>
+		</div>
+		<div class="logo">
+			<a href="https://gogreenroutes.eu/"><img src="ggr.png" alt="GoGreenRoutes" /></a>
+		</div>
 
 		<h3>Publications</h3>
 		<p>
