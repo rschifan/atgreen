@@ -10,7 +10,6 @@
 <div class="about-page">
 	<article class="about-body">
 		<h1 class="sr-only">About ATGreen</h1>
-		<!-- <h3>Project</h3> -->
 
 		<span class="focus-text">
 			<span class="bold-text">ATGreen</span> is an interactive web platform
@@ -19,7 +18,7 @@
 			<span class="bold-text">145 countries</span> worldwide.
 		</span>
 
-		<h3>What is ATGreen useful for?</h3>
+		<h2>What is ATGreen useful for?</h2>
 
 		<p>
 			This interactive web platform has the goal to provide a user-friendly interface to study the
@@ -36,7 +35,7 @@
 		<p>ATGreen provides the following main sections:</p>
 
 		<div style="margin-left: 1rem;">
-			<h4>Measure</h4>
+			<h3>Measure</h3>
 
 			<p>
 				Understand how different areas of your city perform in terms of green accessibility. To help
@@ -54,13 +53,13 @@
 				interest and see which green features in your city concur to the value of the index.
 			</p>
 
-			<h4>Compare</h4>
+			<h3>Compare</h3>
 			<p>
 				Select any two indexes and compare the performance of the various areas of your city based
 				on each of the two to investigate if all the green accessibility indexes tell the same
 				story.
 			</p>
-			<h4>Create</h4>
+			<h3>Create</h3>
 			<p>
 				Not happy with the green accessibility indexes proposed by the selected institutional
 				bodies? Create your own by chooseing the class of index you are interested in, setting your
@@ -71,7 +70,7 @@
 				minutes to run.
 			</p>
 
-			<h4>Draw (under development)</h4>
+			<h3>Draw (under development)</h3>
 			<p>
 				Do you want to see the impact that adding a new green spot would have of the level of green
 				accessibility in your city? Tell us where the new green spot should be located, the class of
@@ -79,7 +78,7 @@
 				new piece of green infrastructure!
 			</p>
 
-			<h4>Explore</h4>
+			<h3>Explore</h3>
 			<p>
 				Navigate the urban space of your city and look at its green infrastructure! Remember to play
 				with the type of green and the size to get a better grasp of the characteristics of the
@@ -87,7 +86,7 @@
 			</p>
 		</div>
 
-		<h3>Why is green accessibility important?</h3>
+		<h2>Why is green accessibility important?</h2>
 		<p>
 			In recent years, greenifying initiatives such as Nature-Based Solutions or the planning of new
 			urban parks have started to frequently appear in the political agenda of cities worldwide, and
@@ -113,7 +112,7 @@
 			environments.
 		</p>
 
-		<h3>How do we measure accessibility to green areas?</h3>
+		<h2>How do we measure accessibility to green areas?</h2>
 
 		<p>
 			This platform is the result of the cleaning, processing and merging of information from a
@@ -185,7 +184,7 @@
 			>
 		</p>
 
-		<h3>Which accessibility indicators do we measure?</h3>
+		<h2>Which accessibility indicators do we measure?</h2>
 
 		<p>Our framework allows you to compute three classes of accessibility metrics:</p>
 
@@ -226,7 +225,7 @@
 			</li>
 		</ul>
 
-		<h3>Team</h3>
+		<h2>Team</h2>
 
 		<p>Main contributors:</p>
 
@@ -256,14 +255,14 @@
 			<a href="https://gogreenroutes.eu/"><img src="ggr.png" alt="GoGreenRoutes" /></a>
 		</div>
 
-		<h3>Publications</h3>
+		<h2>Publications</h2>
 		<p>
 			If you want to read more about the project and go deeper in the technical details refer to our
 			new <a href="https://arxiv.org/abs/2308.05538">preprint</a> or
 			<a href="mailto:rossano.schifanella@unito.it">contact us</a>.
 		</p>
 
-		<h3>Acknowledgements</h3>
+		<h2>Acknowledgements</h2>
 
 		<p>
 			We thank <a href="https://www.bsc.es/reyes-patricio">Dr. Patricio Reyes</a>,
@@ -310,13 +309,13 @@
 		line-height: 1.5rem;
 	}
 
-	h3 {
+	h2 {
 		padding: 0.25rem;
 		font-weight: 900;
 		margin-top: 1rem;
 	}
 
-	h4 {
+	h3 {
 		padding: 0.25rem;
 		font-weight: 800;
 	}
