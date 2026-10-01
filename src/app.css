@@ -1,29 +1,26 @@
 /*
-	Global styles: Carbon (being replaced) and Tailwind for the shadcn-svelte
-	components (src/lib/components/ui).
-
-	Carbon's stylesheet goes into its own cascade layer, the lowest. Unlayered,
-	it would beat every Tailwind utility regardless of specificity — its reset
-	alone squares off every button — so the order below puts Carbon first and
-	lets the shadcn components' utilities win. The app's own component styles
-	stay unlayered and win over both, as before.
-
-	Tailwind's Preflight reset is left out while Carbon's reset still styles the
-	pages that have not moved yet: two resets would fight over every element.
+	Global styles: Tailwind CSS 4 and the theme the shadcn-svelte components
+	(src/lib/components/ui) are built on. This is shadcn-svelte's standard setup;
+	the app's own component styles stay in their .svelte files.
 */
-@layer carbon, theme, base, components, utilities;
-
-@import 'carbon-components-svelte/css/g100.css' layer(carbon);
-@import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tailwindcss';
 @import 'tw-animate-css';
+/* The variants the components are written in (data-checked:, data-horizontal:,
+   data-open: …) mapped onto Bits UI's data attributes, from shadcn-svelte itself. */
+@import 'shadcn-svelte/tailwind.css';
+
+/*
+	IBM Plex Sans, self-hosted (variable weight, per-script subsets): no font CDN
+	in the critical path, nothing for the CSP to allow but 'self'.
+*/
+@import '@fontsource-variable/ibm-plex-sans';
 
 /* The app is dark-only: <html class="dark"> turns on the components' dark: styles. */
 @custom-variant dark (&:is(.dark *));
 
 /*
-	Tokens matched to Carbon's g100 greys, so a migrated page and a Carbon one
-	sit side by side without a seam; the app's green is the focus ring.
+	Dark tokens. The greys continue the IBM g100 palette the app grew up on; the
+	app's green is the brand, the primary action and the focus ring.
 */
 :root {
 	--radius: 0.5rem;
@@ -33,8 +30,9 @@
 	--card-foreground: #f4f4f4;
 	--popover: #1c1e20;
 	--popover-foreground: #f4f4f4;
-	--primary: #f4f4f4;
-	--primary-foreground: #161616;
+	/* Green with near-black text: 8.5:1, where white on this green would fail. */
+	--primary: #42be65;
+	--primary-foreground: #06200f;
 	--secondary: #262626;
 	--secondary-foreground: #f4f4f4;
 	--muted: #262626;
@@ -45,10 +43,17 @@
 	--border: #393939;
 	--input: #393939;
 	--ring: #42be65;
+
+	/* Beyond shadcn's set: secondary text, a stronger rule, and status colours. */
+	--subtle-foreground: #c6c6c6;
+	--border-strong: #6f6f6f;
+	--success: #24a148;
+	--warning: #f1c21b;
+	--danger: #da1e28;
 }
 
 @theme inline {
-	--font-sans: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+	--font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
@@ -71,45 +76,28 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+	--color-subtle-foreground: var(--subtle-foreground);
+	--color-border-strong: var(--border-strong);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-danger: var(--danger);
 }
 
-/*
-	shadcn's own base styles, scoped to its parts (each carries a data-slot) so
-	they do not repaint Carbon's components: borders take the theme colour, and
-	focus rings the green.
-*/
 @layer base {
-	[data-slot],
-	[data-slot] * {
-		border-color: var(--color-border);
-		outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+	* {
+		@apply border-border outline-ring/50;
 	}
-
-	/*
-		The part of Tailwind's Preflight the components rely on, scoped to them:
-		form controls without the browser's own chrome. Without it a ghost button
-		kept the UA's #efefef face — grey text on a light box.
-	*/
-	button[data-slot],
-	[data-slot] button,
-	input[data-slot],
-	[data-slot] input {
-		margin: 0;
-		padding: 0;
-		border: 0 solid;
-		background-color: transparent;
-		color: inherit;
-		font: inherit;
-		letter-spacing: inherit;
+	body {
+		@apply bg-background font-sans text-foreground antialiased;
 	}
-	[data-slot] img {
-		display: block;
-		max-width: 100%;
+	/* Preflight strips every link's colour and underline. A link in running text
+	   keeps its underline, so it is never told apart by colour alone (WCAG 1.4.1);
+	   shadcn's Field.Description does the same. */
+	:where(p, li) a {
+		text-decoration-line: underline;
+		text-underline-offset: 4px;
 	}
-	/* Carbon colours and underlines every link; a menu item or button that is a link does not. */
-	a[data-slot],
-	[data-slot] a {
-		color: inherit;
-		text-decoration: inherit;
+	:where(p, li) a:hover {
+		color: var(--primary);
 	}
 }

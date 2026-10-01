@@ -9,18 +9,17 @@
 	// straight from the package; value imports go through js/map, which registers
 	// the map worker before any map is built.
 	import type * as maplibregl from 'maplibre-gl';
-	import {
-		Button,
-		Checkbox,
-		ContentSwitcher,
-		FormGroup,
-		Slider,
-		Switch,
-		ToastNotification
-	} from 'carbon-components-svelte';
 	import union from '@turf/union';
 
-	import { PlayFilled } from 'carbon-icons-svelte';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import { toast } from 'svelte-sonner';
+	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { cityLabel } from '../js/slug';
+	import GreenTypesField from './fields/GreenTypesField.svelte';
+	import IndexTypeField from './fields/IndexTypeField.svelte';
+	import RangeField from './fields/RangeField.svelte';
+	import TimeBudgetField from './fields/TimeBudgetField.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import {
@@ -52,12 +51,6 @@
 		get_accessibility_layer_fill_opacity
 	} from '../js/layers';
 
-	let green_types = [
-		{ id: 'parks', text: 'parks' },
-		{ id: 'forests', text: 'forests' },
-		{ id: 'grass', text: 'grass' }
-	];
-
 	export let metadata;
 
 	let current_index_type = 0;
@@ -87,7 +80,13 @@
 	let referenceMapLoaded = false;
 	let newMapStyleLoaded = false;
 	let newMapLoaded = false;
-	let empty_resultset_error = false;
+	// An index that came back empty, or a request that failed, is said once in a
+	// toast rather than left as a notification block in the rail.
+	function no_index() {
+		toast.error('No index generated', {
+			description: `No park with these characteristics found in ${cityLabel($current_city?.text)}.`
+		});
+	}
 
 	let green_types_combobox_disabled: boolean;
 	let cell_id: number | undefined = undefined;
@@ -379,7 +378,6 @@
 	}
 
 	function compute() {
-		empty_resultset_error = false;
 		reference_data = empty_geojson;
 		remove_all_layers();
 
@@ -390,7 +388,7 @@
 		// meaning "all three". Refuse the request and say so, instead of sending
 		// green_code=undefined to the API.
 		if (current_green_types_code === undefined) {
-			empty_resultset_error = true;
+			no_index();
 			return;
 		}
 
@@ -433,10 +431,10 @@
 					add_accessibility_layer(reference_data, reference_map);
 					adjust_zoom(reference_data, reference_map);
 				} else {
-					empty_resultset_error = true;
+					no_index();
 				}
 			} catch (error) {
-				empty_resultset_error = true;
+				no_index();
 				console.error('Draw: index request failed', error);
 			} finally {
 				loading.set(false);
@@ -448,7 +446,7 @@
 		cell_id = payload.detail.cellid;
 		let green_types_code = get_green_types_code(current_green_types);
 		if (green_types_code === undefined) {
-			empty_resultset_error = true;
+			no_index();
 			return;
 		}
 		let selected_cell_feature = payload.detail.feature;
@@ -540,72 +538,28 @@
 
 <ToolPane>
 	<svelte:fragment slot="rail">
-		<div class="grp">
-			<span class="bx--label">Index type</span>
-			<ContentSwitcher
-				bind:selectedIndex={current_index_type}
-				on:change={() => {
-					reset();
-				}}
-			>
-				<Switch text="Distance" />
-				<Switch text="Exposure" />
-				<Switch text="Per person" />
-			</ContentSwitcher>
-		</div>
-
-		<FormGroup legendText="Green area types">
-			{#each green_types as t (t.id)}
-				<Checkbox
-					labelText={t.text}
-					value={t.id}
-					bind:group={current_green_types}
-					disabled={green_types_combobox_disabled}
-					on:check={() => {
-						reset();
-					}}
-				/>
-			{/each}
-		</FormGroup>
-
-		<Slider
-			fullWidth
-			hideTextInput
-			labelText="Minimum size — {current_greenarea_size} ha"
+		<IndexTypeField bind:value={current_index_type} onchange={reset} />
+		<GreenTypesField
+			bind:value={current_green_types}
+			disabled={green_types_combobox_disabled}
+			onchange={reset}
+		/>
+		<RangeField
+			title="Minimum size"
+			unit="ha"
 			min={0.5}
 			max={50}
 			step={0.5}
-			minLabel="0.5"
-			maxLabel="50"
 			bind:value={current_greenarea_size}
-			on:change={() => {
-				reset();
-			}}
+			onchange={reset}
 		/>
-
-		<Slider
-			fullWidth
-			hideTextInput
-			labelText="Time budget — {current_time_budget} min"
-			min={0}
-			max={15}
-			minLabel="0"
-			maxLabel="15"
+		<TimeBudgetField
 			bind:value={current_time_budget}
 			disabled={time_budget_slider_disabled}
-			on:change={() => {
-				reset();
-			}}
+			onchange={reset}
 		/>
 
-		<Button
-			disabled={!create_button_disabled}
-			icon={PlayFilled}
-			iconDescription="Draw your own accessibility index"
-			on:click={() => {
-				compute();
-			}}>Draw</Button
-		>
+		<Button disabled={!create_button_disabled} onclick={compute}><PencilIcon /> Draw</Button>
 
 		<p class="hint">
 			{#if reference_data && reference_data.features && reference_data.features.length > 0}
@@ -614,18 +568,6 @@
 				Choose your parameters and press Draw.
 			{/if}
 		</p>
-
-		{#if empty_resultset_error}
-			<ToastNotification
-				lowContrast
-				kind="error"
-				title="No index generated"
-				subtitle="No park with these characteristics found in {$current_city.text}."
-				on:close={() => {
-					empty_resultset_error = false;
-				}}
-			/>
-		{/if}
 	</svelte:fragment>
 
 	<div class="pair">
@@ -639,18 +581,7 @@
 				on:update_center={update_center}
 				on:update_zoom={update_zoom}
 			>
-				<div class="map_header">
-					<p style="background-color: gray;text-align: center;width:50%;margin: auto;">Before</p>
-					{#if reference_data && reference_data.features && reference_data.features.length > 0}
-						<p style="background-color: black;text-align: center;">
-							Click on a cell to greenify the area.
-						</p>
-					{:else}
-						<p style="background-color: black;text-align: center;">
-							Personalize your accessibility index and click Draw.
-						</p>
-					{/if}
-				</div>
+				<Badge variant="secondary" class="caption">Before</Badge>
 
 				{#if reference_data && reference_data.features && reference_data.features.length > 0}
 					<BaseLegend
@@ -674,12 +605,8 @@
 				bind:mapLoaded={newMapLoaded}
 				bind:styleLoaded={newMapStyleLoaded}
 			>
+				<Badge variant="secondary" class="caption">After</Badge>
 				{#if new_data && new_data.features && new_data.features.length > 0}
-					<div class="map_header">
-						<p style="background-color: gray;text-align: center;width:50%;margin: auto;">After</p>
-						<!-- <p>Hover around the selected cell to inspect the differences in accessibility.</p> -->
-					</div>
-
 					<BaseLegend
 						bind:index_type={current_index_type}
 						bind:threshold={current_target}
@@ -725,52 +652,19 @@
 		}
 	}
 
-	div.map_header {
+	.hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		line-height: 1.4;
+		color: var(--muted-foreground);
+	}
+
+	/* "Before" / "After": a caption over each map, never a click target. */
+	.pair :global(.caption) {
 		position: absolute;
-		top: 0px;
-		margin: 0px;
-		padding: 10px;
-		width: 100%;
-		z-index: 100;
-		/* This is a caption ("Before" / "After"), but at z-index 100 and full width it
-		   was swallowing clicks meant for the tab bar above it — a user on the Draw tab
-		   could not reliably click another tab. Found by the teardown e2e test, which
-		   could not leave the Draw tab. */
+		top: 0.75rem;
+		left: 0.75rem;
+		z-index: 10;
 		pointer-events: none;
-	}
-
-	div {
-		padding: 10px 0px;
-	}
-
-	div.blocks-container {
-		display: flex;
-		flex-direction: row;
-		flex-wrap: wrap;
-		flex-basis: auto;
-		align-items: end;
-	}
-	div.block {
-		flex-grow: 1;
-		padding: 10px 10px;
-	}
-
-	p {
-		margin-top: 10px;
-	}
-
-	:global(.bx--slider-text-input, .bx-slider-text-input) {
-		padding: 0%;
-		font-size: smaller;
-	}
-
-	:global(.bx--slider) {
-		min-width: 10rem;
-		max-width: 15rem;
-	}
-
-	:global(.bx--row) {
-		margin-bottom: 10px;
-		gap: 5px;
 	}
 </style>

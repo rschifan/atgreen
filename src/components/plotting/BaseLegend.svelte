@@ -233,7 +233,8 @@
 		position: absolute;
 		left: 1rem;
 		right: 1rem;
-		bottom: 1.5rem;
+		/* Clear of the map attribution, which spans a half-width map. */
+		bottom: 2.5rem;
 		margin: 0 auto;
 		max-width: 25rem;
 		background-color: rgba(10, 10, 10, 0.75);

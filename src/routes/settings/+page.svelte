@@ -1,5 +1,4 @@
 <script lang="ts">
-	// Built from shadcn-svelte parts (the trial of moving off Carbon).
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';

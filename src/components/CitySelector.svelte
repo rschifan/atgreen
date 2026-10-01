@@ -1,9 +1,11 @@
 <script lang="ts">
 	import type * as GeoJSON from 'geojson';
 	import type * as maplibregl from 'maplibre-gl';
-	import { Button, Modal, TooltipDefinition } from 'carbon-components-svelte';
-	import Help from 'carbon-icons-svelte/lib/Help.svelte';
-	import Search from 'carbon-icons-svelte/lib/Search.svelte';
+	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
+	import SearchIcon from '@lucide/svelte/icons/search';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { onMount } from 'svelte';
 	import type { Readable } from 'svelte/store';
 	import { resolve } from '$app/paths';
@@ -54,31 +56,36 @@
 	<div class="hero" bind:this={hero} bind:clientHeight={hero_height}>
 		<h1>
 			How
-			<TooltipDefinition align="start">
-				<span slot="tooltip" class="definition">
+			<Tooltip.Root>
+				<Tooltip.Trigger class="term">accessible</Tooltip.Trigger>
+				<Tooltip.Content side="bottom" class="definition">
 					<strong>Three families of indices</strong>
 					<span><b>Distance</b> — walk to the nearest public green area</span>
 					<span><b>Exposure</b> — all green cover within a walking time</span>
 					<span><b>Per person</b> — public green per resident within a walking time</span>
-				</span>
-				<span class="term">accessible</span>
-			</TooltipDefinition>
+				</Tooltip.Content>
+			</Tooltip.Root>
 			are
-			<span class="tail">
-				<TooltipDefinition align="end">
-					<span slot="tooltip" class="definition">
+			<span class="tail"
+				><Tooltip.Root>
+					<!-- No space between trigger and content: it would land before the "?". -->
+					<Tooltip.Trigger class="term">urban green areas</Tooltip.Trigger><Tooltip.Content
+						side="bottom"
+						class="definition"
+					>
 						<strong>What counts as green</strong>
 						<span>Public parks, grassland and forest, from OpenStreetMap.</span>
 						<span>Exposure also counts private green, from ESA WorldCover 2020.</span>
-					</span>
-					<span class="term">urban green areas</span></TooltipDefinition
-				>?</span
+					</Tooltip.Content>
+				</Tooltip.Root>?</span
 			>
 		</h1>
 
 		<div class="actions">
-			<Button icon={Search} on:click={() => (active = true)}>Select a city</Button>
-			<Button kind="ghost" icon={Help} on:click={() => (open = true)}>How it works</Button>
+			<Button size="lg" onclick={() => (active = true)}><SearchIcon /> Select a city</Button>
+			<Button size="lg" variant="ghost" onclick={() => (open = true)}
+				><CircleHelpIcon /> How it works</Button
+			>
 		</div>
 
 		<p class="hint">Or click a city on the globe.</p>
@@ -89,23 +96,19 @@
 		<a href={resolve('/about')}>Method</a>
 	</p>
 
-	<Modal
-		bind:open
-		modalHeading="Tutorial"
-		passiveModal
-		size="lg"
-		on:click:button--secondary
-		on:open
-		on:close
-		on:submit
-	>
-		<!--
-			Carbon's Modal renders its slot whether or not it is open — it only toggles
-			`class:is-visible` — so an unmounted Tutorial still put its <img> in the DOM
-			and the browser fetched a 3.9 MB screenshot on every landing-page load.
-		-->
-		{#if open}<Tutorial />{/if}
-	</Modal>
+	<!-- The dialog mounts its content only while open, so no screenshot loads until then. -->
+	<Dialog.Root bind:open>
+		<!-- Never taller than the screen: it scrolls inside, so Next is always reachable. -->
+		<Dialog.Content class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-4xl">
+			<Dialog.Header>
+				<Dialog.Title>How it works</Dialog.Title>
+				<Dialog.Description>
+					Five steps, from picking a city to exploring its green areas.
+				</Dialog.Description>
+			</Dialog.Header>
+			<Tutorial />
+		</Dialog.Content>
+	</Dialog.Root>
 </div>
 
 {#if map && mapLoaded && styleLoaded && summary_data}
@@ -168,20 +171,17 @@
 		font-size: clamp(1.5rem, 2vw, 1.875rem);
 		font-weight: 400;
 		line-height: 1.25;
-		color: #f4f4f4;
+		color: var(--foreground);
 		text-wrap: balance;
 	}
-	/* Carbon's definition trigger sets its own small font; in a heading it inherits. */
-	h1 :global(.bx--tooltip__trigger.bx--tooltip__trigger--definition) {
+	/* A defined term: its tooltip opens on hover or keyboard focus. */
+	h1 :global(.term) {
 		font: inherit;
-		letter-spacing: inherit;
-	}
-	h1 :global(.bx--tooltip--definition .bx--tooltip__trigger) {
-		border-bottom: 1px dotted rgba(111, 220, 140, 0.9);
-	}
-	.term {
 		font-weight: 600;
 		color: #ffffff;
+		cursor: help;
+		text-decoration: underline dotted 1px rgba(111, 220, 140, 0.9);
+		text-underline-offset: 0.3em;
 	}
 
 	.actions {
@@ -197,7 +197,7 @@
 		margin: 0.75rem 0 0;
 		font-size: 0.875rem;
 		line-height: 1.4;
-		color: #a8a8a8;
+		color: var(--muted-foreground);
 	}
 
 	/* Where the data comes from, bottom left. */
@@ -210,17 +210,17 @@
 		max-width: calc(100% - 26rem);
 		font-size: 0.75rem;
 		line-height: 1.4;
-		color: #a8a8a8;
+		color: var(--muted-foreground);
 		/* Readable over the bright desert of the relief styles, too. */
 		text-shadow:
 			0 1px 2px rgba(0, 0, 0, 0.9),
 			0 0 8px rgba(0, 0, 0, 0.6);
 	}
 	.sources a {
-		color: #c6c6c6;
+		color: var(--subtle-foreground);
 	}
 	.sources a:hover {
-		color: #f4f4f4;
+		color: var(--foreground);
 	}
 
 	/* The data line is on the About page; the globe needs the room here. */
@@ -230,49 +230,29 @@
 		}
 	}
 
-	/* The tooltip text under each defined term. */
-	.definition {
+	/* The tooltip under each defined term (portalled, so styled globally). */
+	:global(.definition) {
 		display: grid;
 		gap: 0.375rem;
+		max-width: 22rem;
 		font-size: 0.8125rem;
-		font-weight: 400;
 		line-height: 1.4;
-		letter-spacing: 0;
 		text-align: left;
-		text-shadow: none;
 	}
-	.definition strong,
-	.definition b {
+	:global(.definition strong),
+	:global(.definition b) {
 		font-weight: 600;
 	}
-	/*
-		Carbon's component also emits a whitespace text node after itself, straight
-		into the heading — the space before the "?". Inside an inline flex box,
-		whitespace-only text is not rendered, and the "?" cannot wrap on its own.
-	*/
+	/* The "?" stays with the last term, never wrapping onto a line of its own. */
 	.tail {
-		display: inline-flex;
-		align-items: baseline;
-	}
-
-	/* Carbon caps definition tooltips at 13rem, which wraps every line here. */
-	h1 :global(.bx--tooltip--definition .bx--tooltip__trigger + .bx--assistive-text) {
-		max-width: 22rem;
-	}
-	/*
-		Carbon's template leaves a whitespace text node after the trigger button,
-		which rendered as a space before the "?". A flex container does not render
-		whitespace-only text between its items.
-	*/
-	h1 :global(.bx--tooltip--definition) {
-		display: inline-flex;
+		white-space: nowrap;
 	}
 
 	/*
 		The header, translucent over the sky while this page is mounted. Tint only,
 		no backdrop-filter: a backdrop filter makes the header the containing block
-		of its fixed descendants, and Carbon's menu panel (fixed, height 100% − 3rem)
-		then resolved against the 48px bar and opened with no height at all.
+		of its fixed descendants, and a fixed menu panel (height 100% − 3rem) then
+		resolved against the 48px bar and opened with no height at all.
 	*/
 	:global(body.landing .app-header) {
 		background: rgba(6, 10, 16, 0.72);

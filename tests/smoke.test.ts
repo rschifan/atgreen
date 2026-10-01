@@ -526,6 +526,28 @@ test.describe('ATGreen smoke', () => {
 			expect(pos, 'map control container position').toBe('absolute');
 		});
 
+		// The components style their states through variants (data-horizontal:,
+		// data-checked:) that shadcn-svelte's own stylesheet defines. Without that
+		// import nothing errors: the slider tracks are 0px tall and a ticked box
+		// looks empty.
+		test('the rail controls draw their state', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/create');
+			const track = page.locator('[data-slot="slider-track"]').first();
+			await expect(track).toBeVisible({ timeout: 20000 });
+			expect((await track.boundingBox())!.height, 'slider track height').toBeGreaterThan(0);
+
+			const green = 'rgb(66, 190, 101)'; // --primary
+			await expect(page.getByRole('checkbox', { name: 'Parks' })).toHaveCSS(
+				'background-color',
+				green
+			);
+			await expect(page.getByRole('radio', { name: 'Distance' })).toHaveCSS(
+				'background-color',
+				green
+			);
+		});
+
 		test('the index rows are grouped, reachable and operable by keyboard', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
@@ -636,7 +658,7 @@ test.describe('ATGreen smoke', () => {
 			await page.goto('/');
 			await page.getByRole('button', { name: 'How it works', exact: true }).click();
 
-			const img = page.locator('.bx--modal.is-visible img');
+			const img = page.getByRole('dialog').locator('img');
 			for (let n = 1; n <= 5; n++) {
 				await expect(img, `${label} step ${n}`).toHaveAttribute(
 					'src',
@@ -688,7 +710,7 @@ test.describe('ATGreen smoke', () => {
 		// Wait for the first map to settle before driving tabs: the loading overlay can
 		// still cover the tab bar at the moment the tiles become visible.
 		await expect(page.locator('.maplibregl-map')).toHaveCount(1, { timeout: 20000 });
-		await expect(page.locator('.bx--loading-overlay')).toHaveCount(0, { timeout: 20000 });
+		await expect(page.locator('.loading-overlay')).toHaveCount(0, { timeout: 20000 });
 
 		// Draw mounts two maps; leaving it must release both.
 		for (let i = 0; i < 2; i++) {

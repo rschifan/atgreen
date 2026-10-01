@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type * as GeoJSON from 'geojson';
-	import { FitToScreen, View, ViewOff } from 'carbon-icons-svelte';
+	import ScanIcon from '@lucide/svelte/icons/scan';
+	import EyeIcon from '@lucide/svelte/icons/eye';
+	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
 	import { format } from 'd3';
 	import { afterUpdate, onDestroy, onMount, setContext } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
@@ -297,9 +299,9 @@
 		title={visibilityToggle ? 'Hide the green areas layer' : 'Show the green areas layer'}
 		action={setVisibilityLayer}
 		{map}
-		icon={visibilityToggle ? ViewOff : View}
+		icon={visibilityToggle ? EyeOffIcon : EyeIcon}
 	/>
-	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={FitToScreen} />
+	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={ScanIcon} />
 {/if}
 
 <style>

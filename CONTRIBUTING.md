@@ -40,6 +40,24 @@ CI runs exactly these.
   should leave one runnable check behind. Pure functions belong in `src/js/` where they can
   be tested directly; several were moved there for exactly this reason.
 
+## The interface
+
+- **Components come from [shadcn-svelte](https://shadcn-svelte.com)** (Bits UI underneath,
+  Tailwind CSS 4, icons from Lucide). Add one with `npx shadcn-svelte@latest add <name>`; it
+  lands in `src/lib/components/ui/`, where it is our code to edit. A few already carry fixes
+  (accessibility, lint), each with a comment, so check `git diff` before re-adding one with
+  `--overwrite`.
+- **Reuse before you build.** The tool rails share their controls through
+  `src/components/fields/` (index type, green types, time budget, ranges, selects) and
+  `RailSection.svelte` (label, value, hint, error). A new control belongs there if a second
+  rail could use it.
+- **Colours are tokens.** The theme lives in `src/app.css`; use `bg-primary`,
+  `text-muted-foreground`, `var(--border)` and the like, not hex values. Map paint
+  properties are the exception: MapLibre cannot read CSS variables.
+- **New components use runes** (`$props`, `$state`, `$derived`). Older ones are still in
+  legacy mode; Svelte 5 decides per component, so convert a file whole or not at all.
+- **Import icons one by one** (`@lucide/svelte/icons/search`), so only the icons used ship.
+
 ## Commit messages
 
 Explain _why_, not just what. If a change is not obvious from the diff — a workaround, a

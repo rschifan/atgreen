@@ -92,9 +92,9 @@
 	/*
 		A definite height for the section shell.
 
-		Nothing above this sets one: `main.bx--content` is 786px tall inside an
-		800px viewport (48px of header margin plus Carbon's own min-height), so the
-		document scrolled by 34px and, worse, `flex-grow` below had no fixed budget
+		Nothing above this sets one: the main element, below a 48px header, could
+		grow past the viewport (under Carbon it was 786px in an 800px window, so the
+		document scrolled by 34px) and, worse, `flex-grow` below had no fixed budget
 		to divide. The rail's `overflow-y: auto` therefore never engaged — a rail
 		taller than the window stretched the pane instead of scrolling, and the map
 		canvas was left at its old size while the stage grew under it.
@@ -108,7 +108,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		height: calc(100dvh - 3rem); /* 3rem is the Carbon header */
+		height: calc(100dvh - 3rem); /* 3rem is the app header */
 	}
 
 	.sections {
@@ -117,8 +117,8 @@
 		flex: 0 0 auto;
 		height: 3rem;
 		padding: 0 0.5rem;
-		border-bottom: 1px solid var(--cds-ui-03, #393939);
-		background-color: var(--cds-ui-background, #161616);
+		border-bottom: 1px solid var(--border);
+		background-color: var(--background);
 		/* Scrolls rather than collapsing into a dropdown on a narrow viewport. */
 		overflow-x: auto;
 		overflow-y: hidden;
@@ -138,24 +138,24 @@
 		line-height: 1;
 		white-space: nowrap;
 		text-decoration: none;
-		color: var(--cds-text-02, #c6c6c6);
+		color: var(--subtle-foreground);
 		transition:
 			color 70ms linear,
 			background-color 70ms linear;
 	}
 
 	.sections a:hover {
-		color: var(--cds-text-01, #f4f4f4);
-		background-color: var(--cds-ui-01, #262626);
+		color: var(--foreground);
+		background-color: var(--secondary);
 	}
 
 	.sections a:focus-visible {
-		outline: 2px solid var(--cds-focus, #ffffff);
+		outline: 2px solid var(--ring);
 		outline-offset: -2px;
 	}
 
 	.sections a[aria-current='page'] {
-		color: var(--cds-text-01, #f4f4f4);
+		color: var(--foreground);
 		font-weight: 600;
 	}
 
@@ -170,7 +170,7 @@
 		right: 0;
 		bottom: -1px;
 		height: 2px;
-		background-color: var(--cds-interactive-01, #0f62fe);
+		background-color: var(--primary);
 	}
 
 	.notice {
@@ -191,7 +191,7 @@
 	}
 
 	.notice p {
-		color: var(--cds-text-02, #c6c6c6);
+		color: var(--subtle-foreground);
 		margin: 0;
 	}
 </style>

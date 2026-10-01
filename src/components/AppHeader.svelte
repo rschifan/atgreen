@@ -15,6 +15,7 @@
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import { Kbd } from '$lib/components/ui/kbd/index.js';
 	import { cityLabel, cityMatches, toCityPath, toSlug } from '../js/slug';
 	import { cities, current_city, search_active } from '../stores/stores.js';
 
@@ -116,10 +117,7 @@
 		>
 			<SearchIcon />
 			<span class="hidden sm:inline">Search a city</span>
-			<kbd
-				class="hidden h-5 items-center rounded border border-border px-1.5 font-mono text-[0.7rem] sm:inline-flex"
-				>/</kbd
-			>
+			<Kbd class="hidden sm:inline-flex">/</Kbd>
 		</Button>
 
 		<Button

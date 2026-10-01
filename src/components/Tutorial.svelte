@@ -1,88 +1,70 @@
-<script>
-	import {
-		ProgressIndicator,
-		ProgressStep,
-		Content,
-		Button,
-		ImageLoader
-	} from 'carbon-components-svelte';
+<script lang="ts">
+	/**
+	 * "How it works": five screenshots, one per step, with a step list to jump
+	 * between them and Previous / Next. Shown in a dialog from the home page.
+	 */
+	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { cn } from '$lib/utils.js';
 
-	let step = 0;
-	let nsteps = 5;
-	let preventChangeOnClick = true;
-	let vertical;
+	const STEPS = [
+		{ label: 'Select', alt: 'Choosing a city, on the globe or in the search.' },
+		{ label: 'Measure', alt: 'Measure: the accessibility indices and the map of the city.' },
+		{ label: 'Compare', alt: 'Compare: two indices side by side.' },
+		{ label: 'Create', alt: 'Create: building an index of your own.' },
+		{ label: 'Explore', alt: "Explore: the city's green areas, by type and size." }
+	];
 
-	function nextStep() {
-		step += 1;
-		src = `screenshots/wide/step${step + 1}-h.webp`;
-	}
-
-	function previousStep() {
-		step -= 1;
-		src = `screenshots/wide/step${step + 1}-h.webp`;
-	}
-
-	let content_width;
-	let imageLoader;
-	let src;
-	let device;
-
-	$: vertical = content_width <= 400;
-	$: device = vertical ? 'm' : 'h';
-	$: if (step >= 0) {
-		if (vertical) src = `screenshots/mobile/step${step + 1}-m.webp`;
-		else src = `screenshots/wide/step${step + 1}-h.webp`;
-	}
+	let step = $state(0);
+	// Viewport width, not the dialog's: measuring an element reads 0 before
+	// layout, which once fetched both the phone and the desktop screenshot. Read
+	// at once (this only mounts in the browser, when the dialog opens), so the
+	// first image requested is already the right one.
+	let viewport = $state(typeof window === 'undefined' ? 1024 : window.innerWidth);
+	const narrow = $derived(viewport <= 400);
+	const src = $derived(
+		narrow ? `screenshots/mobile/step${step + 1}-m.webp` : `screenshots/wide/step${step + 1}-h.webp`
+	);
 </script>
 
-<svelte:window bind:innerWidth={content_width} />
+<svelte:window bind:innerWidth={viewport} />
 
-<div>
-	<!--
-		This div used to `bind:clientWidth={content_width}` as well as the window
-		binding above. Two writers disagreed: clientWidth reads 0 before layout, so
-		`vertical` flipped true then false and the browser fetched the mobile
-		screenshot *and* the desktop one. Viewport width is the signal we want anyway.
-	-->
-	<div>
-		<ProgressIndicator {preventChangeOnClick} currentIndex={step} {vertical}>
-			<ProgressStep label="Select" description="" complete={step >= 0} />
-			<ProgressStep label="Measure" description="" complete={step >= 1} />
-			<ProgressStep label="Compare" description="" complete={step >= 2} />
-			<ProgressStep label="Create" description="" complete={step >= 3} />
-			<ProgressStep label="Explore" description="" complete={step >= 4} />
-		</ProgressIndicator>
-	</div>
+<div class="flex flex-col gap-4">
+	<ol class="flex flex-wrap gap-1.5" aria-label="Steps">
+		{#each STEPS as s, i (s.label)}
+			<li>
+				<button
+					type="button"
+					class={cn(
+						'flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors',
+						i === step
+							? 'border-primary bg-primary text-primary-foreground'
+							: 'border-border text-muted-foreground hover:text-foreground'
+					)}
+					aria-current={i === step ? 'step' : undefined}
+					onclick={() => (step = i)}
+				>
+					<span class="tabular-nums">{i + 1}</span>
+					{s.label}
+				</button>
+			</li>
+		{/each}
+	</ol>
 
-	<div style="padding:1rem 0;outline: none;pointer-events: none;">
-		<!-- <ImageLoader
-			fadeIn
-			bind:this={imageLoader}
-			bind:src
-			style="outline:none;pointer-events:none;"
-		/> -->
+	<!-- The phone screenshots are portrait: capped so the step list and buttons stay on screen. -->
+	<img
+		{src}
+		alt={STEPS[step].alt}
+		class="max-h-[60dvh] w-full rounded-lg border border-border object-contain"
+	/>
 
-		<img {src} width="100%" alt="" />
-	</div>
-
-	<div>
-		{#if step > 0}
-			<Button size="small" style="float:left;border-radius: 5px;" on:click={previousStep}
-				>Previous</Button
-			>
-		{/if}
-
-		{#if step < nsteps - 1}
-			<Button size="small" style="float:right;border-radius: 5px;" on:click={nextStep}>Next</Button>
-		{/if}
+	<div class="flex justify-between">
+		<Button variant="outline" disabled={step === 0} onclick={() => (step -= 1)}>
+			<ChevronLeftIcon /> Previous
+		</Button>
+		<Button disabled={step === STEPS.length - 1} onclick={() => (step += 1)}>
+			Next <ChevronRightIcon />
+		</Button>
 	</div>
 </div>
-
-<style>
-	:global(.bx--progress--vertical .bx--progress-label) {
-		display: contents;
-	}
-	:global(.bx--modal-content p) {
-		display: inline-flex;
-	}
-</style>

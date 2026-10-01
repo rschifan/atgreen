@@ -36,7 +36,7 @@ rather than hard-coded, so adding one is a server-side change.
 
 ```
 browser ── SvelteKit (adapter-node, :4000) ── nginx ── PostgREST (:3002) ── PostgreSQL "esa"
-              Carbon components                          /rpc/*          OSM · GHS-POP · ESA WorldCover
+              shadcn-svelte UI                           /rpc/*          OSM · GHS-POP · ESA WorldCover
               MapLibre GL JS ── basemap: OpenFreeMap (OSM vector tiles, no key)
 ```
 

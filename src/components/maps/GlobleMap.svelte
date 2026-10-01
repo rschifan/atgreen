@@ -479,10 +479,10 @@
 	/* The map credits, dark to sit quietly on a dark page instead of a white box. */
 	.map-root :global(.maplibregl-ctrl-attrib) {
 		background: rgba(6, 10, 16, 0.7);
-		color: #a8a8a8;
+		color: var(--muted-foreground);
 	}
 	.map-root :global(.maplibregl-ctrl-attrib a) {
-		color: #c6c6c6;
+		color: var(--subtle-foreground);
 	}
 	.map-root :global(.maplibregl-ctrl-attrib-button) {
 		filter: invert(1);

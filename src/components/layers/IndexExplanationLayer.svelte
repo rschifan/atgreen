@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type * as GeoJSON from 'geojson';
-	import { Exit } from 'carbon-icons-svelte';
+	import XIcon from '@lucide/svelte/icons/x';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { BOUNDARY_MAP_COLOR, TEXT_MAP_COLOR } from '../../js/colors';
@@ -194,5 +194,5 @@
 </script>
 
 {#if $current_cell && $current_cell.x != -1 && $current_cell.y != -1}
-	<ButtonMap title="Deselect cell" action={back} {map} icon={Exit} />
+	<ButtonMap title="Deselect cell" action={back} {map} icon={XIcon} />
 {/if}

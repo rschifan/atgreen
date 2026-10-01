@@ -1,17 +1,9 @@
 <script lang="ts">
-	import {
-		Button,
-		Checkbox,
-		ContentSwitcher,
-		FormGroup,
-		Slider,
-		Switch,
-		Tag,
-		ToastNotification
-	} from 'carbon-components-svelte';
-
-	import { PlayFilled } from 'carbon-icons-svelte';
+	import PlayIcon from '@lucide/svelte/icons/play';
 	import { format, max, min } from 'd3';
+	import { toast } from 'svelte-sonner';
+	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
 	import { get_indexposure_esa, get_indmindistance_osm, get_indperperson_osm } from '../js/api';
@@ -21,12 +13,11 @@
 	import ToolPane from './ToolPane.svelte';
 	import BaseLegend from './plotting/BaseLegend.svelte';
 	import { get_green_types_code } from '../js/utils';
-
-	let green_types = [
-		{ id: 'parks', text: 'parks' },
-		{ id: 'forests', text: 'forests' },
-		{ id: 'grass', text: 'grass' }
-	];
+	import { cityLabel } from '../js/slug';
+	import GreenTypesField from './fields/GreenTypesField.svelte';
+	import IndexTypeField from './fields/IndexTypeField.svelte';
+	import RangeField from './fields/RangeField.svelte';
+	import TimeBudgetField from './fields/TimeBudgetField.svelte';
 
 	let current_index_type = 0;
 	let current_green_types = ['parks', 'forests', 'grass'];
@@ -54,7 +45,14 @@
 	let styleLoaded = false;
 	let mapLoaded = false;
 	let unit: string;
-	let empty_resultset_error = false;
+
+	// An index that came back empty, or a request that failed, is said once in a
+	// toast rather than left as a notification block in the rail.
+	function no_index() {
+		toast.error('No index generated', {
+			description: `No park with these characteristics found in ${cityLabel($current_city?.text)}.`
+		});
+	}
 
 	let green_types_combobox_disabled: boolean;
 
@@ -114,7 +112,7 @@
 		// meaning "all three". Refuse the request and say so, instead of sending
 		// green_code=undefined to the API.
 		if (current_green_types_code === undefined) {
-			empty_resultset_error = true;
+			no_index();
 			return;
 		}
 
@@ -160,10 +158,10 @@
 				if (response_json && response_json.features && response_json.features.length > 0) {
 					data = response_json;
 				} else {
-					empty_resultset_error = true;
+					no_index();
 				}
 			} catch (error) {
-				empty_resultset_error = true;
+				no_index();
 				console.error('Create: index request failed', error);
 			} finally {
 				loading.set(false);
@@ -193,105 +191,37 @@
 
 <ToolPane>
 	<svelte:fragment slot="rail">
-		<!--
-			`ContentSwitcher` for a three-value choice: a dropdown cost two clicks to
-			show three words, and this one had no `on:select`, so stale results stayed
-			on the map after switching index.
-		-->
-		<div class="grp">
-			<span class="bx--label">Index type</span>
-			<ContentSwitcher bind:selectedIndex={current_index_type}>
-				<Switch text="Distance" />
-				<Switch text="Exposure" />
-				<Switch text="Per person" />
-			</ContentSwitcher>
-		</div>
-
-		<!--
-			`bind:group` is two-way by construction. This was a MultiSelect passed
-			`selectedIds` one-way with no bind and no on:select, so nothing the user
-			ticked ever reached `current_green_types` and every request asked for all
-			three types regardless. There is no one-way variant of this to write.
-		-->
-		<FormGroup legendText="Green area types">
-			{#each green_types as t (t.id)}
-				<Checkbox
-					labelText={t.text}
-					value={t.id}
-					bind:group={current_green_types}
-					disabled={green_types_combobox_disabled}
-				/>
-			{/each}
-		</FormGroup>
-
-		<!--
-			`hideTextInput` removes Carbon's `<input type="number">`, which rendered
-			0.5 as "0,5" under an it-IT locale. Passing both end labels fixes the
-			asymmetry of giving only `maxLabel`.
-		-->
-		<Slider
-			fullWidth
-			hideTextInput
-			labelText="Minimum size — {current_greenarea_size} ha"
+		<IndexTypeField bind:value={current_index_type} />
+		<GreenTypesField bind:value={current_green_types} disabled={green_types_combobox_disabled} />
+		<RangeField
+			title="Minimum size"
+			unit="ha"
 			min={0.5}
 			max={50}
 			step={0.5}
-			minLabel="0.5"
-			maxLabel="50"
 			bind:value={current_greenarea_size}
 		/>
-
-		<Slider
-			fullWidth
-			hideTextInput
-			labelText="Time budget — {current_time_budget} min"
-			min={0}
-			max={15}
-			minLabel="0"
-			maxLabel="15"
-			bind:value={current_time_budget}
-			disabled={time_budget_slider_disabled}
-		/>
+		<TimeBudgetField bind:value={current_time_budget} disabled={time_budget_slider_disabled} />
 
 		<Button
 			disabled={!create_button_disabled}
-			icon={PlayFilled}
-			iconDescription="Create your own accessibility index"
-			on:click={() => {
+			onclick={() => {
 				if ($current_city) compute();
-			}}>Create</Button
+			}}><PlayIcon /> Create</Button
 		>
 
-		{#if empty_resultset_error}
-			<ToastNotification
-				lowContrast
-				kind="error"
-				title="No index generated"
-				subtitle="No park with these characteristics found in {$current_city.text}."
-				on:close={() => {
-					empty_resultset_error = false;
-				}}
-			/>
-		{/if}
-
 		{#if data && data.features.length > 0}
-			<Slider
-				fullWidth
-				hideTextInput
-				labelText="Target — {current_target} {unit}"
-				bind:min={current_target_min}
-				bind:max={current_target_max}
-				minLabel={String(current_target_min)}
-				maxLabel={String(current_target_max)}
-				value={current_target}
-				on:change={(ev) => {
-					current_target = ev.detail;
-					update_cells_selected();
-				}}
+			<RangeField
+				title="Target"
+				{unit}
+				min={current_target_min}
+				max={current_target_max}
+				bind:value={current_target}
+				onchange={update_cells_selected}
 			/>
-
-			<Tag type="green">{format('.1%')(cells_satisfying_target)} of cells meet the target</Tag>
-
+			<Badge variant="outline" class="self-start border-primary/40 text-primary">
+				{format('.1%')(cells_satisfying_target)} of cells meet the target
+			</Badge>
 			<BaseLegend index_type={current_index_type} bind:threshold={current_target} {data} />
 		{/if}
 	</svelte:fragment>
@@ -315,55 +245,14 @@
 </ToolPane>
 
 <style>
-	.grp {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-
 	.empty {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--cds-text-05, #8d8d8d);
+		color: var(--muted-foreground);
 		text-align: center;
 		padding: 1rem;
-	}
-
-	div {
-		padding: 10px 0px;
-	}
-
-	div.blocks-container {
-		display: flex;
-		flex-direction: row;
-		flex-wrap: wrap;
-		flex-basis: auto;
-		align-items: end;
-	}
-	div.block {
-		flex-grow: 1;
-		padding: 10px 10px;
-	}
-
-	p {
-		margin-top: 10px;
-	}
-
-	:global(.bx--slider-text-input, .bx-slider-text-input) {
-		padding: 0%;
-		font-size: smaller;
-	}
-
-	:global(.bx--slider) {
-		min-width: 10rem;
-		max-width: 15rem;
-	}
-
-	:global(.bx--row) {
-		margin-bottom: 10px;
-		gap: 5px;
 	}
 </style>
