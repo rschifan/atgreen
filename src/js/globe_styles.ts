@@ -303,7 +303,7 @@ export function apply_globe_style(
 		}
 
 		case 'relief':
-			// The globe as GlobleMap dresses it: natural colours, white city points.
+			// The globe as GlobeMap dresses it: natural colours, white city points.
 			break;
 	}
 	return () => {};

@@ -1,6 +1,4 @@
-import { format } from 'd3';
-const percentage_formatter = format('.0%');
-const mq_formatter = format('.2s');
+import { html } from './utils';
 
 export enum AccessibilityIndexType {
 	MINIMUM_DISTANCE,
@@ -25,14 +23,28 @@ export const DEFAULT_TARGET: Record<number, number> = {
 	[AccessibilityIndexType.PER_PERSON]: 9
 };
 
+/**
+ * The unit each type is measured in, as the interface writes it. There were two
+ * tables, and they disagreed with the rail: per-person area was "sq m" in one,
+ * "mq" in the other and "m²" on screen.
+ */
 export const INDEX_UNIT: Record<number, string> = {
 	[AccessibilityIndexType.MINIMUM_DISTANCE]: 'min',
 	[AccessibilityIndexType.EXPOSURE]: 'ha',
-	[AccessibilityIndexType.PER_PERSON]: 'sq m'
+	[AccessibilityIndexType.PER_PERSON]: 'm²'
 };
 
 export const ClassificationScheme = { LINEAR: 'linear', LOGARITHMIC: 'logarithmic' };
-export const UnitType = { SQUARE_METERS: 'mq', MINUTES: 'min', HECTARS: 'ha' };
+
+/**
+ * How each type's colour ramp spreads its values. Green per person spans orders
+ * of magnitude (Turin's cells run from 13 to 2,600 m²), so it is logarithmic.
+ */
+export const INDEX_CLASSIFICATION: Record<number, string> = {
+	[AccessibilityIndexType.MINIMUM_DISTANCE]: ClassificationScheme.LINEAR,
+	[AccessibilityIndexType.EXPOSURE]: ClassificationScheme.LINEAR,
+	[AccessibilityIndexType.PER_PERSON]: ClassificationScheme.LOGARITHMIC
+};
 
 export class AccessibilityIndex {
 	name: string;
@@ -55,20 +67,7 @@ export class AccessibilityIndex {
 		this.size = size;
 		this.distance = distance;
 
-		switch (this.type) {
-			case AccessibilityIndexType.MINIMUM_DISTANCE:
-				this.unit = UnitType.MINUTES;
-				break;
-			case AccessibilityIndexType.PER_PERSON:
-				this.unit = UnitType.SQUARE_METERS;
-				break;
-			case AccessibilityIndexType.EXPOSURE:
-				this.unit = UnitType.HECTARS;
-				break;
-			default:
-				this.unit = UnitType.MINUTES;
-				break;
-		}
+		this.unit = INDEX_UNIT[type] ?? INDEX_UNIT[AccessibilityIndexType.MINIMUM_DISTANCE];
 	}
 }
 
@@ -87,35 +86,19 @@ export class AccessibilityIndexImpl extends AccessibilityIndex {
 	) {
 		super(name, description, type, size, distance);
 		this.band = band;
-		this.classification =
-			type == AccessibilityIndexType.MINIMUM_DISTANCE || type == AccessibilityIndexType.EXPOSURE
-				? ClassificationScheme.LINEAR
-				: ClassificationScheme.LOGARITHMIC;
-		this.ascending = type == AccessibilityIndexType.MINIMUM_DISTANCE ? true : false;
-	}
-
-	get_tooltip(p: number, value: number): string {
-		if (this.type == AccessibilityIndexType.MINIMUM_DISTANCE)
-			return `${percentage_formatter(p)} of the population has access to a greenspace of at least ${
-				this.size
-			} ha within ${value} min.`;
-		else if (this.type == AccessibilityIndexType.PER_PERSON)
-			return `${percentage_formatter(p)} of the population has access within ${
-				this.distance
-			} minutes to ${mq_formatter(value)} mq of greenspace per person.`;
-		return `${percentage_formatter(
-			p
-		)} of the population is exposed to ${value} ha of green areas within ${this.distance} minutes`;
+		this.classification = INDEX_CLASSIFICATION[type];
+		// Lower is better: a shorter walk.
+		this.ascending = type == AccessibilityIndexType.MINIMUM_DISTANCE;
 	}
 }
 
-export class Target<AccessibilityIndex> {
-	index: AccessibilityIndex;
+export class Target<T extends AccessibilityIndex> {
+	index: T;
 	threshold: number;
 	predicate: string;
 	description: string;
 
-	constructor(index: AccessibilityIndex, threshold: number, description: string) {
+	constructor(index: T, threshold: number, description: string) {
 		this.index = index;
 		this.threshold = threshold;
 		this.predicate = this.get_predicate();
@@ -127,6 +110,19 @@ export class Target<AccessibilityIndex> {
 		else return '>=';
 	}
 }
+
+/** One index as /rpc/getindexes returns it. */
+export type IndexRecord = {
+	name: string;
+	band: number;
+	description: string;
+	target_description: string;
+	target: number;
+	type: 'distance' | 'exposure' | 'per person';
+	size: number;
+	distance: number;
+	green_type: string;
+};
 
 export class TargetStoreImpl {
 	map: Map<string, Target<AccessibilityIndexImpl>>;
@@ -147,26 +143,17 @@ export class TargetStoreImpl {
 		return this.map.get(key);
 	}
 
-	getIndexbyBand(band: number): AccessibilityIndexImpl | undefined {
-		let current: AccessibilityIndexImpl | undefined = undefined;
-		this.map.forEach((item) => {
-			const i: AccessibilityIndexImpl = item.index;
-			if (i.band === band) current = item.index;
-		});
-		return current;
-	}
-
 	getBand(key: string): number | undefined {
 		const current: Target<AccessibilityIndexImpl> | undefined = this.map.get(key);
 		if (current) return current.index.band;
 		return current;
 	}
 
-	static createInstance(data: {}): TargetStoreImpl {
+	static createInstance(data: IndexRecord[]): TargetStoreImpl {
 		const store: TargetStoreImpl = new TargetStoreImpl();
 
 		if (data) {
-			for (const [_, current] of Object.entries(data)) {
+			for (const current of data) {
 				const key: string = current.name;
 				let type: AccessibilityIndexType;
 
@@ -305,4 +292,65 @@ export function describe_index_target(target: {
 		default:
 			return '';
 	}
+}
+
+/** Rounded the way a reader wants it: one decimal below 100, whole numbers above. */
+function readable(x: number): string {
+	return x >= 100 ? Math.round(x).toLocaleString('en') : String(Math.round(x * 10) / 10);
+}
+
+/**
+ * A cell's value in words, for its map popup: what the cell has, and whether
+ * that meets the target. Measure and Create each built this by hand, and the
+ * copies had drifted: one rounded the value and one did not, and both read
+ * "of green within of 15 min walking".
+ */
+export function describe_cell(
+	value: number,
+	index: { type: AccessibilityIndexType; size: number; distance: number },
+	threshold: number,
+	name?: string
+): string {
+	const unit = INDEX_UNIT[index.type];
+	const v = readable(value);
+	const lead =
+		index.type === AccessibilityIndexType.MINIMUM_DISTANCE
+			? value === 0
+				? html`A green area of at least <b>${index.size} ha</b> is within the cell.`
+				: html`The nearest green area of at least <b>${index.size} ha</b> is about
+						<b>${v} min</b> away on foot.`
+			: index.type === AccessibilityIndexType.EXPOSURE
+				? html`<b>${v} ha</b> of green within a <b>${index.distance}-minute</b> walk.`
+				: html`<b>${v} m²</b> of green per resident within a <b>${index.distance}-minute</b> walk.`;
+	const lower_is_better = index.type === AccessibilityIndexType.MINIMUM_DISTANCE;
+	const meets = lower_is_better ? value <= threshold : value >= threshold;
+	const target = name ? html`the ${name} target` : 'the target';
+	const verdict = meets
+		? `Meets ${target}.`
+		: `Misses ${target}: ` +
+			html`${v} ${unit} ${lower_is_better ? '>' : '<'} ${readable(threshold)} ${unit}.`;
+	return `<p>${lead}</p><p>${verdict}</p>`;
+}
+
+/**
+ * The OpenStreetMap green-area types /rpc/queryosmgreen returns, indexed by the
+ * id it uses for each. Explore's picker and its map popup both read them here.
+ */
+export const OSM_GREEN_TYPES = [
+	'village_green',
+	'garden',
+	'park',
+	'recreation_ground',
+	'grass',
+	'shrubbery',
+	'grassland',
+	'meadow',
+	'wood',
+	'forest'
+];
+
+/** "recreation_ground" as people read it: "Recreation ground". */
+export function green_type_label(id: number): string {
+	const t = OSM_GREEN_TYPES[id];
+	return t ? t[0].toUpperCase() + t.slice(1).replaceAll('_', ' ') : '';
 }

@@ -1,243 +1,105 @@
 <script lang="ts">
-	import { scaleDiverging, scaleLinear } from 'd3-scale';
-	import {
-		current_accessibility_index,
-		current_accessibility_index_data
-	} from '../../stores/stores';
-
-	import { onMount, onDestroy, afterUpdate } from 'svelte';
-	import type { Unsubscriber } from 'svelte/store';
-	import { AV_COLOR_GREEN, AV_COLOR_MID, AV_COLOR_RED, ToRGBA } from '../../js/colors';
+	/**
+	 * The colour ramp under a choropleth: the same bounds, direction and scale the
+	 * map draws with, and the target marked where the colour turns. Measure,
+	 * Create and Draw share it. They each had a copy, and Create's sat under the
+	 * map canvas, where it never showed.
+	 */
+	import { format, scaleDiverging } from 'd3';
+	import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from '../../js/colors';
 	import { is_clamped_high, robust_bounds } from '../../js/layers';
-	import { AccessibilityIndexImpl, ClassificationScheme } from '../../js/types';
-	import { format } from 'd3';
+	import {
+		AccessibilityIndexType,
+		ClassificationScheme,
+		INDEX_CLASSIFICATION,
+		INDEX_UNIT
+	} from '../../js/types';
 
-	afterUpdate(() => {});
+	let {
+		values,
+		type,
+		threshold
+	}: {
+		/** The cell values on the map. */
+		values: number[];
+		type: AccessibilityIndexType;
+		threshold: number;
+	} = $props();
 
-	onDestroy(() => {
-		if (unsubscribe_accessibility_index) unsubscribe_accessibility_index();
-		if (unsubscibe_accessibility_data_layer_event) unsubscibe_accessibility_data_layer_event();
-	});
+	const STEPS = 40;
+	const TICKS = 4;
+	const M = { top: 4, right: 15, bottom: 18, left: 15 };
+	const RAMP = 8;
+	const GAP = 5;
+	const axis = M.top + RAMP + GAP;
 
-	onMount(() => {
-		unsubscibe_accessibility_data_layer_event = current_accessibility_index_data.subscribe(
-			(value) => {
-				if (value) {
-					let data = $current_accessibility_index_data.features.map((el) => {
-						return el.properties.v;
-					});
-
-					/*
-						The SAME bounds the map's colour ramp uses. Taking raw min/max
-						here while get_colormap_rule clamps outliers would put a legend on
-						screen that disagrees with the map it explains.
-					*/
-					({ min: minv, max: maxv } = robust_bounds(data, threshold));
-					clamped_high = is_clamped_high(data, threshold);
-
-					// if (metadata) current = metadata.getTarget($current_accessibility_index).index;
-					// if (metadata) threshold = metadata.getTarget($current_accessibility_index).threshold;
-
-					// The log transform goes in a local. `threshold` is re-derived from
-					// `metadata` by a reactive statement, so logging it in place raced that
-					// statement and could log an already-logged value — the same
-					// corruption that reaches Create's rail as "Target — NaN sq m".
-					let scaled_threshold = threshold;
-
-					if (current && current.classification == ClassificationScheme.LOGARITHMIC) {
-						minv = minv == 0 ? 0 : Math.log(minv);
-						maxv = maxv == 0 ? 0 : Math.log(maxv);
-						scaled_threshold = threshold == 0 ? 0 : Math.log(threshold);
-					}
-
-					marker_value = scaled_threshold;
-
-					colorScale = scaleDiverging()
-						.domain([minv, scaled_threshold, maxv])
-						.range(get_color_range());
-					xScale = scaler().domain([0, n_steps]).range([minv, maxv]);
-					xTicksValueScale = scaler().domain([0, n_xticks]).range([minv, maxv]);
-
-					loading = false;
-
-					// `window.onresize = ...` used to be here: it clobbered any other
-					// handler on the page, was never removed, and sat inside a data
-					// subscriber so it was reassigned on every payload. It was also
-					// redundant — `$: offset = ...` below already recomputes from
-					// containerWidth, which the parent binds with <svelte:window>.
-				}
-			}
-		);
-
-		unsubscribe_accessibility_index = current_accessibility_index.subscribe((value) => {
-			if (value) {
-				loading = true;
-			}
-		});
-	});
-
-	function get_color_range(): string[] {
-		if (current && current.ascending)
-			return [ToRGBA(AV_COLOR_GREEN, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_RED, 1.0)];
-		else return [ToRGBA(AV_COLOR_RED, 1.0), ToRGBA(AV_COLOR_MID, 1.0), ToRGBA(AV_COLOR_GREEN, 1.0)];
-	}
-
-	let loading = false;
-	let unsubscribe_accessibility_index: (() => void) | undefined;
-	let minv: number;
-	let maxv: number;
-
-	let legend_node;
-
-	export let metadata;
-	/*
-		Sizes itself from its own container rather than from the window. It used to
-		take `containerWidth` from a `<svelte:window bind:innerWidth>` in the parent
-		and compute a left offset to fake centring — only ever correct when the map
-		happened to be full-width. Centring is the box model's job now.
-	*/
-	let containerWidth: number = 0;
+	let width = $state(0);
+	const inner = $derived(Math.max(0, width - M.left - M.right));
+	const log = $derived(INDEX_CLASSIFICATION[type] === ClassificationScheme.LOGARITHMIC);
+	const scaled = (x: number) => (log ? (x === 0 ? 0 : Math.log(x)) : x);
 
 	/*
-		`top` used to be 25 to reserve room for a caption drawn *inside* the svg as
-		<text>. The caption is now a real <figcaption>, so the svg only has to hold
-		the ramp and its ticks.
+		The SAME bounds the map's ramp uses: get_colormap_rule clamps outliers off,
+		and a legend drawn from the raw min and max would disagree with the map.
 	*/
-	let margins = {
-		top: 4,
-		right: 15,
-		bottom: 18,
-		left: 15
-	};
-
-	let ticks = {
-		font: 10,
-		margin: 5,
-		height: 2,
-		stroke: 1,
-		color: '#AAA'
-	};
-
-	/*
-		The ramp is drawn as 40 discrete rects. Stroking each one in black turned a
-		continuous scale into a barcode — the gaps read as class breaks that the
-		data does not have. No stroke, so the 40 steps render as the gradient they
-		are meant to be.
-	*/
-	let legend = {
-		height: 8,
-		stroke: 'none',
-		stroke_width: 0,
-		font_color: 'white'
-	};
-
-	let n_steps = 40;
-	let n_xticks: number;
-	let width_class: number;
-
-	let innerWidth: number;
-	let unsubscibe_accessibility_data_layer_event: Unsubscriber;
-
-	let current: AccessibilityIndexImpl;
-
-	let scaler = scaleLinear;
-	let colorScale;
-	let xScale;
-	let xTicksValueScale;
-	let threshold: number;
-	/** The target, in the same scaled space as minv/maxv, for the legend marker. */
-	let marker_value: number;
-	/** True when the top of the ramp is a percentile, not the real maximum. */
-	let clamped_high = false;
-
-	// `metadata.getTarget(x)` returns undefined for an index that is not loaded yet,
-	// and these ran before $current_accessibility_index was set. Svelte 4 happened to
-	// evaluate them late enough to hide it; Svelte 5 does not, which is a scheduling
-	// difference exposing a missing guard rather than a new bug.
-	$: current = metadata?.getTarget($current_accessibility_index)?.index;
-	$: threshold = metadata?.getTarget($current_accessibility_index)?.threshold;
-
-	$: n_steps = 40;
-	$: n_xticks = 4;
-	// Fill the rail. The container stretches to the rail's width regardless of
-	// what the svg inside it measures, so this cannot feed back on itself.
-	$: width = Math.max(containerWidth, 0);
-	$: innerWidth = width - margins.left - margins.right;
-	$: width_class = innerWidth / n_steps;
+	const bounds = $derived(robust_bounds(values, threshold));
+	const lo = $derived(scaled(bounds.min));
+	const hi = $derived(scaled(bounds.max));
+	const target = $derived(scaled(threshold));
+	const clamped = $derived(is_clamped_high(values, threshold));
+	// A shorter walk is better, so distance runs green to red; the others red to green.
+	const color = $derived(
+		scaleDiverging<string>()
+			.domain([lo, target, hi])
+			.range(
+				type === AccessibilityIndexType.MINIMUM_DISTANCE
+					? [ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED]
+					: [ACOLOR_RED, ACOLOR_MID, ACOLOR_GREEN]
+			)
+	);
+	const at = (i: number, n: number) => lo + ((hi - lo) * i) / n;
+	const label = (i: number) =>
+		format('~s')(Math.round(log ? Math.exp(at(i, TICKS)) : at(i, TICKS))) +
+		(i === TICKS && clamped ? '+' : '');
 </script>
 
-{#if $current_accessibility_index_data && current && !loading}
-	<div bind:this={legend_node} bind:clientWidth={containerWidth} class="legend-container">
+{#if values.length > 0 && Number.isFinite(threshold)}
+	<div class="legend-container" bind:clientWidth={width}>
 		<figure>
 			<!--
-				The caption names the target, so the white notch on the ramp below has a
-				meaning. Without it the colour simply changes partway along for no
-				stated reason — which is how ESA's 1.4%-wide below-target band read as
-				"near zero" instead of "misses the target".
+				The caption names the target, so the white notch on the ramp has a
+				meaning: without it ESA's 1.4%-wide below-target band read as "near
+				zero" instead of "misses the target".
 			-->
-			<figcaption class="eyebrow">
-				{current.classification} scale &middot; {current.unit}{Number.isFinite(threshold)
-					? ` · target ${threshold}`
-					: ''}
+			<figcaption>
+				{INDEX_CLASSIFICATION[type]} scale · {INDEX_UNIT[type]} · target {threshold}
 			</figcaption>
-			<svg height={margins.top + margins.bottom + legend.height + ticks.margin} {width}>
-				{#each Array(n_steps) as _, index (index)}
+			<svg {width} height={axis + M.bottom} aria-hidden="true">
+				<!-- No stroke on the steps: a stroked ramp reads as class breaks the data does not have. -->
+				{#each Array(STEPS) as _, i (i)}
 					<rect
-						x={margins.left + index * width_class}
-						y={margins.top}
-						width={width_class}
-						height={legend.height}
-						stroke-width={legend.stroke_width}
-						stroke={legend.stroke}
-						fill={colorScale(xScale(index))}
+						x={M.left + (i * inner) / STEPS}
+						y={M.top}
+						width={inner / STEPS}
+						height={RAMP}
+						fill={color(at(i, STEPS))}
 					/>
 				{/each}
 
-				{#each Array(n_xticks + 1) as _, index (index)}
-					{@const xm = margins.left + (index * innerWidth) / n_xticks}
-					{@const y1m = margins.top + legend.height + ticks.margin - ticks.height}
-					{@const y2m = y1m + 2 * ticks.height}
-
-					<text
-						dominant-baseline="middle"
-						alignment-baseline="middle"
-						text-anchor={index == 0 ? 'middle' : index == n_xticks ? 'end' : 'middle'}
-						font-weight="normal"
-						font-size={ticks.font}
-						fill={legend.font_color}
-						x={margins.left + (index * innerWidth) / n_xticks}
-						y={margins.top + legend.height + ticks.margin + ticks.font}
-					>
-						{(current.classification == ClassificationScheme.LOGARITHMIC
-							? format('~s')(Math.round(Math.exp(xTicksValueScale(index))))
-							: format('~s')(Math.round(xTicksValueScale(index)))) +
-							(index === n_xticks && clamped_high ? '+' : '')}
-					</text>
-
-					<line x1={xm} y1={y1m} x2={xm} y2={y2m} stroke="#AAA" stroke-width={ticks.stroke} />
+				<line x1={M.left} y1={axis} x2={M.left + inner} y2={axis} stroke="#aaa" />
+				{#each Array(TICKS + 1) as _, i (i)}
+					{@const x = M.left + (i * inner) / TICKS}
+					<line x1={x} y1={axis - 2} x2={x} y2={axis + 2} stroke="#aaa" />
+					<text {x} y={axis + 12} text-anchor={i === TICKS ? 'end' : 'middle'}>{label(i)}</text>
 				{/each}
 
-				<line
-					x1={margins.left}
-					y1={margins.top + legend.height + ticks.margin}
-					x2={margins.left + innerWidth}
-					y2={margins.top + legend.height + ticks.margin}
-					stroke={ticks.color}
-					stroke-width={ticks.stroke}
-				/>
-
-				<!--
-					Where the colour turns. Without this the ramp shows a break with no
-					explanation, which is how ESA's 1.4%-wide below-target band read as
-					"near zero" rather than "misses the target".
-				-->
-				{#if maxv > minv && marker_value >= minv && marker_value <= maxv}
-					{@const mx = margins.left + ((marker_value - minv) / (maxv - minv)) * innerWidth}
+				{#if hi > lo && target >= lo && target <= hi}
+					{@const mx = M.left + ((target - lo) / (hi - lo)) * inner}
 					<line
 						x1={mx}
-						y1={margins.top - 3}
+						y1={M.top - 3}
 						x2={mx}
-						y2={margins.top + legend.height + 3}
+						y2={M.top + RAMP + 3}
 						stroke="#ffffff"
 						stroke-width="1.5"
 					/>
@@ -249,11 +111,10 @@
 
 <style>
 	/*
-		Centred over the map by the box model. No padding on this element: the svg
-		inside is sized from its clientWidth, so padding here would push the ramp
-		wider than the box that contains it. The svg carries its own 15px margins.
+		Centred over the map by the box model. No padding here: the svg is sized
+		from this element's width and carries its own 15px margins.
 	*/
-	div.legend-container {
+	.legend-container {
 		position: absolute;
 		left: 1rem;
 		right: 1rem;
@@ -274,8 +135,8 @@
 		padding: 0.375rem 0 0.25rem;
 	}
 
-	.eyebrow {
-		/* Matches the svg's own left margin so caption and ramp share an edge. */
+	figcaption {
+		/* The svg's left margin, so caption and ramp share an edge. */
 		padding-inline: 15px;
 		font-size: 0.6875rem;
 		font-weight: 600;
@@ -284,25 +145,8 @@
 		color: var(--muted-foreground);
 	}
 
-	line:hover,
-	text:hover,
-	rect:hover {
-		outline: none;
-	}
-
-	line:focus,
-	text:focus,
-	rect:focus {
-		outline: none;
-	}
-
-	svg text {
-		-webkit-user-select: none;
-		-moz-user-select: none;
-		-ms-user-select: none;
-		user-select: none;
-	}
-	svg text::selection {
-		background: none;
+	text {
+		font-size: 10px;
+		fill: white;
 	}
 </style>

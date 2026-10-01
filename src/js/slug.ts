@@ -135,27 +135,3 @@ export function findCityByParam<T extends NamedFeature>(features: T[], param: st
 	if (!wanted) return undefined;
 	return features.find((f) => toSlug(name(f) ?? '') === wanted);
 }
-
-/**
- * Every ASCII slug claimed by more than one city name.
- *
- * These cities are all reachable by their exact name, so this is not a fault --
- * it is the evidence for why links are built from the name. The test pins the
- * known set so a future import that adds a pair is noticed here.
- */
-export function findSlugCollisions(features: NamedFeature[]): Record<string, string[]> {
-	const byslug: Record<string, string[]> = {};
-	for (const f of features ?? []) {
-		const n = f?.properties?.name;
-		if (!n) continue;
-		const s = toSlug(n);
-		if (!s) continue;
-		(byslug[s] ??= []).push(n);
-	}
-	const clashes: Record<string, string[]> = {};
-	for (const [s, names] of Object.entries(byslug)) {
-		const distinct = [...new Set(names)];
-		if (distinct.length > 1) clashes[s] = distinct.sort();
-	}
-	return clashes;
-}

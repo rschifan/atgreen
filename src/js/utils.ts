@@ -32,7 +32,11 @@ function fit(map: maplibregl.Map, bb: [number, number, number, number], animate:
 	});
 }
 
-export function adjust_zoom(data: any, map: maplibregl.Map, animate = false) {
+export function adjust_zoom(
+	data: GeoJSON.FeatureCollection | null | undefined,
+	map: maplibregl.Map,
+	animate = false
+) {
 	if (!map) return;
 	try {
 		if (data && data.features && data.features.length > 0) {
@@ -67,7 +71,7 @@ export function refit_zoom(map: maplibregl.Map) {
 	}
 }
 
-export function get_green_types_code(green_types: []) {
+export function get_green_types_code(green_types: string[] | undefined) {
 	if (!green_types) return undefined;
 
 	// An empty selection used to join to '', match no case, and fall through to the
@@ -109,10 +113,6 @@ export function get_green_types_code(green_types: []) {
 
 export function create_empty_geojson(): GeoJSON.FeatureCollection {
 	return { type: 'FeatureCollection', features: [] };
-}
-
-export function create_geojson(features: GeoJSON.Feature[]): GeoJSON.FeatureCollection {
-	return { type: 'FeatureCollection', features: features };
 }
 
 /** The five characters that can break out of HTML text or an attribute value. */

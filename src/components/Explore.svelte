@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
 	import { useWatcher } from 'alova';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import * as InputGroup from '$lib/components/ui/input-group/index.js';
@@ -6,6 +7,7 @@
 	import type { Unsubscriber } from 'svelte/store';
 	import { get_greenareas_osm } from '../js/api';
 	import { extent } from '../js/layers';
+	import { OSM_GREEN_TYPES, green_type_label } from '../js/types';
 	import { current_city } from '../stores/stores';
 	import { cityLabel } from '../js/slug';
 	import ExploreMap from './maps/ExploreMap.svelte';
@@ -14,41 +16,27 @@
 	import MultiSelectField from './fields/MultiSelectField.svelte';
 	import RangeField from './fields/RangeField.svelte';
 
-	let green_types = [
-		{ text: 'village_green', id: 0 },
-		{ text: 'garden', id: 1 },
-		{ text: 'park', id: 2 },
-		{ text: 'recreation_ground', id: 3 },
-		{ text: 'grass', id: 4 },
-		{ text: 'shrubbery', id: 5 },
-		{ text: 'grassland', id: 6 },
-		{ text: 'meadow', id: 7 },
-		{ text: 'wood', id: 8 },
-		{ text: 'forest', id: 9 }
-	];
-
 	// `[]` as a type annotation means "an array that can only ever be empty", which
 	// is why pushing to these was an error. `data: object` likewise hid every
 	// property access behind an error.
-	type GreenFeature = {
-		properties: { osm_value: number; osm_name: string; size: number };
-	};
+	type GreenFeature = GeoJSON.Feature<
+		GeoJSON.Geometry,
+		{ osm_value: number; osm_name: string; size: number }
+	>;
 
 	let green_types_selected_ids: number[] = [];
-	let green_areas_names: string[] = [];
 	let current_search_text_value = '';
 	let current_minimum_size: number;
 	let results: string[] | undefined = [];
-	let data: { features: GreenFeature[] } | undefined;
+	let data: GeoJSON.FeatureCollection<GeoJSON.Geometry, GreenFeature['properties']> | undefined;
 	let minv = 0;
 	let maxv = 0;
-	let map_ref: object;
 
-	// The OpenStreetMap values, as people read them: "recreation_ground" →
-	// "Recreation ground". The ids stay the numbers the map filters on.
-	$: type_items = green_types.map((t) => ({
-		id: String(t.id),
-		text: t.text[0].toUpperCase() + t.text.slice(1).replaceAll('_', ' ')
+	// The OpenStreetMap values as people read them; the ids stay the numbers the
+	// map filters on.
+	const type_items = OSM_GREEN_TYPES.map((_, id) => ({
+		id: String(id),
+		text: green_type_label(id)
 	}));
 
 	let unsubscribe_greenareas_request: Unsubscriber;
@@ -81,9 +69,6 @@
 	}
 
 	$: if (data && data.features.length > 0) {
-		const current_ids = new Set<number>();
-		green_areas_names = [];
-
 		// The slider bounds used to be scanned here by hand, from
 		// `el.properties.size.toFixed(2)` — a STRING, so once maxv held one the
 		// comparisons went lexicographic ("9.00" > "10.00" is true) — with an `else`
@@ -95,12 +80,8 @@
 		// including for NaN and empty input.
 		({ min: minv, max: maxv } = extent(data.features.map((el) => Number(el.properties.size))));
 
-		data.features.forEach((el) => {
-			current_ids.add(el.properties.osm_value);
-			if (el.properties.osm_name) green_areas_names.push(el.properties.osm_name);
-		});
-
-		green_types_selected_ids = Array.from(current_ids);
+		// Every type the city has starts selected.
+		green_types_selected_ids = [...new Set(data.features.map((el) => el.properties.osm_value))];
 	}
 
 	onMount(() => {
@@ -168,8 +149,7 @@
 	</svelte:fragment>
 
 	<ExploreMap
-		bind:ref={map_ref}
-		bind:data
+		{data}
 		container="explore_green_areas_map"
 		green_types={green_types_selected_ids}
 		minimum_size={current_minimum_size}

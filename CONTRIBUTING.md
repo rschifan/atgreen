@@ -51,6 +51,10 @@ CI runs exactly these.
   `src/components/fields/` (index type, green types, time budget, ranges, selects) and
   `RailSection.svelte` (label, value, hint, error). A new control belongs there if a second
   rail could use it.
+- **One map shell.** `BaseMap.svelte` is the only component that creates a map; a view
+  wraps it and adds its layers in `onstyle` or `onload`. Hover feedback is `track_hover`
+  (`src/js/map.js`), the hide and fit buttons are `LayerControls`, the ramp is `Legend`,
+  and popups take their look from `app.css`.
 - **Colours are tokens.** The theme lives in `src/app.css`; use `bg-primary`,
   `text-muted-foreground`, `var(--border)` and the like, not hex values. Map paint
   properties are the exception: MapLibre cannot read CSS variables.

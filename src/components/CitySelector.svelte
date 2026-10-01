@@ -12,7 +12,7 @@
 	import { globe_style } from '../stores/settings';
 	import Tutorial from './Tutorial.svelte';
 	import SummaryLayer from './layers/SummaryLayer.svelte';
-	import GlobleMap from './maps/GlobleMap.svelte';
+	import GlobeMap from './maps/GlobeMap.svelte';
 
 	export let active: boolean;
 	// The city list store (/rpc/getcitiesinfo): a FeatureCollection of points.
@@ -40,7 +40,7 @@
 
 <div class="landing" data-globe-style={$globe_style}>
 	<div class="globe">
-		<GlobleMap
+		<GlobeMap
 			bind:ref={map}
 			bind:mapLoaded
 			bind:styleLoaded

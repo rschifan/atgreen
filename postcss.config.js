@@ -1,7 +1,7 @@
 export default {
 	plugins: {
-		// Tailwind was configured but never used: no utility classes in any component
-		// and no `--tw-` output in the built CSS. Removed along with its config.
+		// Vendor prefixes for the components' own <style> blocks. Tailwind's CSS
+		// (src/app.css) is compiled by @tailwindcss/vite, which prefixes it itself.
 		autoprefixer: {}
 	}
 };

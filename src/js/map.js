@@ -67,6 +67,56 @@ export function get_default_map_props(container, center) {
 	};
 }
 
-const key = {};
+/**
+ * The popup every data layer shows on hover: no close button, no click to
+ * dismiss; it follows the pointer's feature and goes when the pointer leaves.
+ * Its look is set once, in app.css.
+ */
+export function hover_popup() {
+	return new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+}
 
-export { maplibregl, key };
+/**
+ * Hover feedback for one layer: the pointer cursor, and a `hover` feature-state
+ * on the feature under the pointer that moves with it and clears when it leaves.
+ *
+ * `on_change(feature, event)` hears each change of feature, and
+ * `on_change(undefined)` the leave: the moment to show or drop a popup. The
+ * listeners go with the map (`map.remove()`), so there is nothing to undo.
+ *
+ * This replaces four hand-written copies, which kept the hovered id in a
+ * variable seeded with 0 and read 0 as "nothing hovered" — but `generateId`
+ * numbers features from 0, so the first feature's hover state never cleared.
+ *
+ * @param {maplibregl.Map} map
+ * @param {string} layer
+ * @param {string} source
+ * @param {(feature: maplibregl.MapGeoJSONFeature | undefined, event?: maplibregl.MapLayerMouseEvent) => void} [on_change]
+ * @returns {{ clear: () => void }}
+ */
+export function track_hover(map, layer, source, on_change) {
+	/** @type {string | number | undefined} */
+	let hovered;
+	const clear = () => {
+		if (hovered !== undefined && map.getSource(source))
+			map.setFeatureState({ source, id: hovered }, { hover: false });
+		hovered = undefined;
+	};
+	map.on('mousemove', layer, (e) => {
+		const feature = e.features?.[0];
+		if (!feature || feature.id === hovered) return;
+		clear();
+		hovered = feature.id;
+		map.setFeatureState({ source, id: hovered }, { hover: true });
+		map.getCanvas().style.cursor = 'pointer';
+		on_change?.(feature, e);
+	});
+	map.on('mouseleave', layer, () => {
+		map.getCanvas().style.cursor = '';
+		clear();
+		on_change?.(undefined);
+	});
+	return { clear };
+}
+
+export { maplibregl };

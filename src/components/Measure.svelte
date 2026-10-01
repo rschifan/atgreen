@@ -1,29 +1,29 @@
 <script lang="ts">
+	import type * as GeoJSON from 'geojson';
+	import type * as maplibregl from 'maplibre-gl';
+	import { get } from 'svelte/store';
 	import AccessibilityLayer from './layers/AccessibilityLayer.svelte';
 	import BaseMap from './maps/BaseMap.svelte';
 	import NewIndexesSummary from './controls/NewIndexesSummary.svelte';
 	import IndexExplanationLayer from './layers/IndexExplanationLayer.svelte';
 	import Legend from './plotting/Legend.svelte';
 	import ToolPane from './ToolPane.svelte';
+	import type { TargetStoreImpl } from '../js/types';
+	import { current_accessibility_index, current_accessibility_index_data } from '../stores/stores';
 
-	export let metadata;
+	export let metadata: TargetStoreImpl;
 
-	let map;
+	let map: maplibregl.Map | undefined;
 	let styleLoaded = false;
 	let mapLoaded = false;
 
-	/*
-		The `onMount` that used to live here did two things, both wrong:
-
-		- `current_accessibility_index.set('WHO')`, which clobbered the user's
-		  choice. Harmless when the panel mounted once; since panels became
-		  route-scoped it ran on every visit, so leaving Measure and coming back
-		  silently reset the index. The default now lives in the store, set once
-		  at module load.
-		- `window.scrollTo` toward `getElementById('measure')` — an id that exists
-		  nowhere in the source, so it scrolled to 50px for no reason. In a
-		  viewport-height layout there is nothing to scroll at all.
-	*/
+	$: target = metadata?.getTarget($current_accessibility_index);
+	$: values =
+		$current_accessibility_index_data?.features.map((f: GeoJSON.Feature) => f.properties?.v) ?? [];
+	// The grid on the map belongs to the index chosen when it arrived. Until the
+	// next one lands, the legend stays hidden rather than describe the new index
+	// over the old grid. `get` keeps the index out of this block's dependencies.
+	$: grid_index = $current_accessibility_index_data ? get(current_accessibility_index) : undefined;
 </script>
 
 <ToolPane>
@@ -33,12 +33,9 @@
 
 	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded />
 
-	<!--
-		The scale sits on the map, the way Create's and Draw's do. It was in the
-		rail, which put it a long way from the colours it explains and made Measure
-		the odd one out among the five panes.
-	-->
-	<Legend {metadata} />
+	{#if target && grid_index === $current_accessibility_index}
+		<Legend {values} type={target.index.type} threshold={target.threshold} />
+	{/if}
 
 	{#if map && mapLoaded && styleLoaded}
 		<AccessibilityLayer {map} {metadata} />

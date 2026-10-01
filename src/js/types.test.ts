@@ -4,8 +4,9 @@ import {
 	INDEX_GROUP_LABEL,
 	INDEX_GROUP_ORDER,
 	TargetStoreImpl,
-	UnitType,
-	describe_index_target
+	describe_cell,
+	describe_index_target,
+	green_type_label
 } from './types';
 
 // Shaped exactly like the live /rpc/getindexes payload.
@@ -59,9 +60,10 @@ describe('TargetStoreImpl.createInstance', () => {
 	});
 
 	it('derives the unit from the type', () => {
-		expect(store.getTarget('WHO')?.index.unit).toBe(UnitType.MINUTES);
-		expect(store.getTarget('IPP')?.index.unit).toBe(UnitType.SQUARE_METERS);
-		expect(store.getTarget('ESA')?.index.unit).toBe(UnitType.HECTARS);
+		// As the rail writes them: the per-person unit was "mq" here and "m²" on screen.
+		expect(store.getTarget('WHO')?.index.unit).toBe('min');
+		expect(store.getTarget('IPP')?.index.unit).toBe('m²');
+		expect(store.getTarget('ESA')?.index.unit).toBe('ha');
 	});
 
 	it('resolves a band from an index name', () => {
@@ -72,12 +74,6 @@ describe('TargetStoreImpl.createInstance', () => {
 	it('returns undefined for an unknown index rather than throwing', () => {
 		expect(store.getBand('NOPE')).toBeUndefined();
 		expect(store.getTarget('NOPE')).toBeUndefined();
-	});
-
-	it('resolves an index back from its band', () => {
-		expect(store.getIndexbyBand(4)?.name).toBe('WHO');
-		expect(store.getIndexbyBand(32)?.name).toBe('ESA');
-		expect(store.getIndexbyBand(999)).toBeUndefined();
 	});
 
 	it('survives an empty payload', () => {
@@ -149,5 +145,50 @@ describe('INDEX_GROUP_ORDER', () => {
 		];
 		expect([...INDEX_GROUP_ORDER].sort()).toEqual([...types].sort());
 		for (const t of INDEX_GROUP_ORDER) expect(INDEX_GROUP_LABEL[t]).toBeTruthy();
+	});
+});
+
+describe('describe_cell', () => {
+	// As the popup renders it: HTML collapses runs of whitespace.
+	const text = (s: string) => s.replace(/\s+/g, ' ');
+	const distance = { type: AccessibilityIndexType.MINIMUM_DISTANCE, size: 0.5, distance: 5 };
+	const perPerson = { type: AccessibilityIndexType.PER_PERSON, size: 0.5, distance: 30 };
+	const exposure = { type: AccessibilityIndexType.EXPOSURE, size: 0.01, distance: 5 };
+
+	it('reads a distance out in minutes, and a park inside the cell as such', () => {
+		expect(text(describe_cell(7.26, distance, 5))).toContain('about <b>7.3 min</b> away');
+		expect(text(describe_cell(0, distance, 5))).toContain('is within the cell');
+	});
+
+	it('says whether the cell meets the target, in the direction the type reads', () => {
+		expect(text(describe_cell(4, distance, 5, 'WHO'))).toContain('Meets the WHO target.');
+		expect(text(describe_cell(7.26, distance, 5))).toContain(
+			'Misses the target: 7.3 min &gt; 5 min.'
+		);
+		expect(text(describe_cell(12, perPerson, 9))).toContain('Meets the target.');
+		expect(text(describe_cell(0.2, exposure, 0.5))).toContain('0.2 ha &lt; 0.5 ha');
+	});
+
+	it('rounds large areas to whole numbers', () => {
+		expect(text(describe_cell(8106.98, perPerson, 9))).toContain(
+			'<b>8,107 m²</b> of green per resident'
+		);
+	});
+
+	it('escapes the index name, which comes from the API', () => {
+		expect(text(describe_cell(1, distance, 5, '<b>x</b>'))).toContain(
+			'the &lt;b&gt;x&lt;/b&gt; target'
+		);
+	});
+});
+
+describe('green_type_label', () => {
+	it('reads an OpenStreetMap value the way people write it', () => {
+		expect(green_type_label(3)).toBe('Recreation ground');
+		expect(green_type_label(9)).toBe('Forest');
+	});
+
+	it('is empty for an id it does not know', () => {
+		expect(green_type_label(42)).toBe('');
 	});
 });

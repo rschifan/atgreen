@@ -1,12 +1,17 @@
 <script lang="ts">
-	import type * as GeoJSON from 'geojson';
+	/**
+	 * Why a cell scores what it does: once a cell is selected on Measure's map,
+	 * the green areas behind its value — the nearest park, or everything within
+	 * reach — drawn and named on the map.
+	 */
 	import XIcon from '@lucide/svelte/icons/x';
 	import { onDestroy, onMount } from 'svelte';
 	import type { Unsubscriber } from 'svelte/store';
+	import { get_explanation } from '../../js/api';
 	import { BOUNDARY_MAP_COLOR, TEXT_MAP_COLOR } from '../../js/colors';
 	import { LABEL_FONT, maplibregl } from '../../js/map';
-	import { AccessibilityIndexType } from '../../js/types';
-	import { adjust_zoom } from '../../js/utils';
+	import type { TargetStoreImpl } from '../../js/types';
+	import { adjust_zoom, create_empty_geojson } from '../../js/utils';
 	import {
 		current_accessibility_index,
 		current_cell,
@@ -15,181 +20,91 @@
 	} from '../../stores/stores';
 	import ButtonMap from '../maps/ButtonMap.svelte';
 
-	const empty_geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-
-	export let metadata;
+	export let metadata: TargetStoreImpl;
 	export let map: maplibregl.Map;
 
-	let PGAS_SOURCE = 'PGAS_SOURCE';
-	let PGAS_LAYER = 'PGAS_LAYER';
-	let PGAS_LABELS_LAYER = 'PGAS_LABELS_LAYER';
+	const SOURCE = 'PGAS_SOURCE';
+	const LAYER = 'PGAS_LAYER';
+	const LABELS_LAYER = 'PGAS_LABELS_LAYER';
 
-	$: target = metadata?.getTarget($current_accessibility_index);
-	$: threshold = target?.threshold;
-	$: index = target?.index;
-	$: type = index?.type;
-	$: unit = index?.unit;
-	$: size = index?.size;
-	$: distance = index?.distance;
-
-	let unsubscribe_current_cell_event: Unsubscriber;
+	let unsubscribe_current_cell: Unsubscriber | undefined;
 
 	onMount(() => {
-		init();
+		map.addSource(SOURCE, { type: 'geojson', data: create_empty_geojson(), generateId: true });
+		map.addLayer({
+			id: LAYER,
+			type: 'fill',
+			source: SOURCE,
+			paint: { 'fill-outline-color': 'black', 'fill-color': 'green', 'fill-opacity': 1.0 }
+		});
+		map.addLayer({
+			id: LABELS_LAYER,
+			type: 'symbol',
+			source: SOURCE,
+			layout: {
+				'text-field': ['get', 'osm_name'],
+				'text-font': LABEL_FONT,
+				'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
+				'text-justify': 'auto',
+				'text-size': 10
+			},
+			paint: {
+				'text-halo-width': 1,
+				'text-halo-color': BOUNDARY_MAP_COLOR,
+				'text-color': TEXT_MAP_COLOR
+			}
+		});
 
-		unsubscribe_current_cell_event = current_cell.subscribe((data) => {
-			// back() sets {x:-1, y:-1} to mean "nothing selected", which is a truthy
-			// object — so deselecting used to fire an explanation request for the cell
-			// id derived from (-1,-1).
-			if (data && data.x !== -1 && data.y !== -1) compute_explanation();
+		unsubscribe_current_cell = current_cell.subscribe((cell) => {
+			// {x: -1, y: -1} means "nothing selected"; it is a truthy object, so it
+			// once fired a request for the cell id derived from (-1, -1).
+			if (cell && cell.x !== -1 && cell.y !== -1) explain(cell);
 		});
 	});
 
 	onDestroy(() => {
-		if (unsubscribe_current_cell_event) unsubscribe_current_cell_event();
-
-		// The parent map may already have been removed, after which these throw.
+		unsubscribe_current_cell?.();
+		// The map may already be gone, after which these throw.
 		try {
-			for (const layer of [PGAS_LABELS_LAYER, PGAS_LAYER]) {
-				if (map?.getLayer(layer)) map.removeLayer(layer);
-			}
-			if (map?.getSource(PGAS_SOURCE)) map.removeSource(PGAS_SOURCE);
+			for (const layer of [LABELS_LAYER, LAYER]) if (map.getLayer(layer)) map.removeLayer(layer);
+			if (map.getSource(SOURCE)) map.removeSource(SOURCE);
 		} catch {
 			/* map already destroyed */
 		}
 	});
 
-	function init() {
-		if (!map.getSource(PGAS_SOURCE))
-			map.addSource(PGAS_SOURCE, {
-				type: 'geojson',
-				data: empty_geojson,
-				generateId: true
-			});
-		if (!map.getLayer(PGAS_LAYER))
-			map.addLayer({
-				id: PGAS_LAYER,
-				type: 'fill',
-				source: PGAS_SOURCE,
-				layout: {},
-				paint: {
-					'fill-outline-color': 'black',
-					'fill-color': 'green',
-					'fill-opacity': 1.0
-				}
-			});
-		if (!map.getLayer(PGAS_LABELS_LAYER))
-			map.addLayer({
-				id: PGAS_LABELS_LAYER,
-				type: 'symbol',
-				source: PGAS_SOURCE,
-				layout: {
-					'text-field': ['get', 'osm_name'],
-					'text-font': LABEL_FONT,
-					'text-variable-anchor': ['top', 'left', 'bottom', 'right'],
-					'text-justify': 'auto',
-					'text-size': 10
-				},
-				paint: {
-					'text-halo-width': 1,
-					'text-halo-color': BOUNDARY_MAP_COLOR,
-					'text-color': TEXT_MAP_COLOR
-				}
-			});
-	}
-
-	function get_cell(x: number, y: number, nrows: number) {
+	/** The grid numbers cells column by column, from 1. */
+	function cell_id(x: number, y: number, nrows: number) {
 		return y + nrows * (x - 1);
 	}
 
-	function get_pgas_parameters(): { distance: number; pgas_size: number } {
-		if (target)
-			return {
-				pgas_size: size,
-				distance: distance
-			};
-		else return { pgas_size: 0, distance: 0 };
-	}
+	async function explain(cell: { x: number; y: number }) {
+		const index = metadata?.getTarget($current_accessibility_index)?.index;
+		if (!$current_city || !index) return;
 
-	async function compute_explanation() {
-		if (!$current_city) return;
-
-		let params: { pgas_size: number; distance: number } = get_pgas_parameters();
-		let response;
-
+		loading.set(true);
 		try {
-			loading.set(true);
-			if (type == AccessibilityIndexType.MINIMUM_DISTANCE) {
-				let params_url = new URLSearchParams({
-					cityname: $current_city.text,
-					source: get_cell(
-						$current_cell.x,
-						$current_cell.y,
-						$current_city.feature.properties.nrows
-					).toString(),
-					pga_size: size.toString()
-				});
-
-				response = fetch('https://atgreen.hpc4ai.unito.it/rpc/closestpark_osm?' + params_url);
-			}
-			if (type == AccessibilityIndexType.EXPOSURE) {
-				let params_url = new URLSearchParams({
-					cityname: $current_city.text,
-					source: get_cell(
-						$current_cell.x,
-						$current_cell.y,
-						$current_city.feature.properties.nrows
-					).toString(),
-					pga_size: size.toString(),
-					distance: distance.toString()
-				});
-
-				response = fetch(
-					'https://atgreen.hpc4ai.unito.it/rpc/allareaswithindistance_esa?' + params_url
-				);
-			} else if (type == AccessibilityIndexType.PER_PERSON) {
-				let params_url = new URLSearchParams({
-					cityname: $current_city.text,
-					source: get_cell(
-						$current_cell.x,
-						$current_cell.y,
-						$current_city.feature.properties.nrows
-					).toString(),
-					pga_size: size.toString(),
-					distance: distance.toString()
-				});
-
-				response = fetch(
-					'https://atgreen.hpc4ai.unito.it/rpc/exposurewithindistance_osm?' + params_url
-				);
-			}
-
-			// This had no .catch at all, and loading.set(true) above it, so a failed
-			// explanation request left the overlay up forever: the enclosing try/catch
-			// cannot see a rejection from a promise it never awaited.
-			if (response) {
-				const data = await response;
-				if (!data.ok) throw new Error(`explanation request failed: HTTP ${data.status}`);
-				const features = await data.json();
-				if (features && features.features && features.features.length > 0) {
-					map.getSource<maplibregl.GeoJSONSource>(PGAS_SOURCE)?.setData(features);
-					adjust_zoom(features, map);
-				}
+			const areas = await get_explanation(
+				index.type,
+				$current_city.text,
+				cell_id(cell.x, cell.y, $current_city.feature.properties.nrows),
+				index.size,
+				index.distance
+			);
+			if (areas) {
+				map.getSource<maplibregl.GeoJSONSource>(SOURCE)?.setData(areas);
+				adjust_zoom(areas, map);
 			}
 		} catch (error) {
 			console.error('IndexExplanationLayer: explanation request failed', error);
 		} finally {
-			// Exactly one clear for the one ticket taken above. An inner finally *and*
-			// an outer catch would both fire on a throw and decrement twice, which with
-			// a concurrent request would clear that request's ticket instead.
 			loading.set(false);
 		}
 	}
 
 	function back() {
 		current_cell.set({ x: -1, y: -1 });
-		if (map.getSource(PGAS_SOURCE))
-			map.getSource<maplibregl.GeoJSONSource>(PGAS_SOURCE)?.setData(empty_geojson);
+		map.getSource<maplibregl.GeoJSONSource>(SOURCE)?.setData(create_empty_geojson());
 	}
 </script>
 

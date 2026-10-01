@@ -442,9 +442,9 @@ test.describe('ATGreen smoke', () => {
 
 			// `.map-root > :global(div)` was meant to size the map's own container,
 			// but <slot /> renders into .map-root too, so the rule also handed
-			// `height: 100%` to the slotted legend and map header. BaseLegend is
-			// `position: absolute; bottom: 1.5rem; max-width: 25rem` over a dark
-			// translucent background — at full height that drew a 400px-wide black
+			// `height: 100%` to the slotted legend and map header. The legend is
+			// `position: absolute; max-width: 25rem` over a dark translucent
+			// background — at full height that drew a 400px-wide black
 			// column down the middle of the Before map and pushed its colour ramp
 			// clean off the top edge.
 			const overlays = await page.$$eval('.map-root', (roots) =>

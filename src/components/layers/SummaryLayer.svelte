@@ -204,21 +204,13 @@
 
 <style>
 	/* The city name on hover: a small dark chip, readable over land and sea. */
+	/* The shared popup (app.css), tighter and tinted to the night sky. */
 	:global(.city-tip .maplibregl-popup-content) {
 		padding: 0.375rem 0.625rem;
 		border-radius: 4px;
 		background: rgba(14, 20, 26, 0.92);
-		color: var(--foreground);
-		font:
-			500 0.8125rem/1.2 'IBM Plex Sans',
-			'Helvetica Neue',
-			Arial,
-			sans-serif;
+		font-weight: 500;
+		line-height: 1.2;
 		letter-spacing: 0.01em;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-		pointer-events: none;
-	}
-	:global(.city-tip .maplibregl-popup-tip) {
-		display: none;
 	}
 </style>
