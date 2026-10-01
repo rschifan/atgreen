@@ -5,11 +5,10 @@
 	 * Create and Draw share it. They each had a copy, and Create's sat under the
 	 * map canvas, where it never showed.
 	 */
-	import { format, scaleDiverging } from 'd3';
-	import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from '../../js/colors';
-	import { is_clamped_high, robust_bounds } from '../../js/layers';
+	import { format } from 'd3';
+	import { is_clamped_high, ramp_color, robust_bounds } from '../../js/layers';
 	import {
-		AccessibilityIndexType,
+		type AccessibilityIndexType,
 		ClassificationScheme,
 		INDEX_CLASSIFICATION,
 		INDEX_UNIT
@@ -47,16 +46,9 @@
 	const hi = $derived(scaled(bounds.max));
 	const target = $derived(scaled(threshold));
 	const clamped = $derived(is_clamped_high(values, threshold));
-	// A shorter walk is better, so distance runs green to red; the others red to green.
-	const color = $derived(
-		scaleDiverging<string>()
-			.domain([lo, target, hi])
-			.range(
-				type === AccessibilityIndexType.MINIMUM_DISTANCE
-					? [ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED]
-					: [ACOLOR_RED, ACOLOR_MID, ACOLOR_GREEN]
-			)
-	);
+	// The map's own colours, so the ramp cannot drift from the map.
+	const color = $derived(ramp_color(values, threshold, type));
+	const raw = (x: number) => (log ? Math.exp(x) : x);
 	const at = (i: number, n: number) => lo + ((hi - lo) * i) / n;
 	const label = (i: number) =>
 		format('~s')(Math.round(log ? Math.exp(at(i, TICKS)) : at(i, TICKS))) +
@@ -82,7 +74,7 @@
 						y={M.top}
 						width={inner / STEPS}
 						height={RAMP}
-						fill={color(at(i, STEPS))}
+						fill={color(raw(at(i, STEPS)))}
 					/>
 				{/each}
 

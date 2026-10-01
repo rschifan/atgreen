@@ -5,8 +5,12 @@ import {
 	INDEX_GROUP_ORDER,
 	TargetStoreImpl,
 	describe_cell,
+	describe_index_goal,
 	describe_index_target,
-	green_type_label
+	describe_median,
+	green_type_label,
+	parse_profile,
+	standing
 } from './types';
 
 // Shaped exactly like the live /rpc/getindexes payload.
@@ -117,9 +121,9 @@ describe('describe_index_target', () => {
 	};
 
 	it('states what each family of index requires', () => {
-		expect(describe_index_target(distance)).toBe('≥0.5 ha within 5 min');
-		expect(describe_index_target(perPerson)).toBe('9 m² per person within 30 min');
-		expect(describe_index_target(exposure)).toBe('0.5 ha within 5 min');
+		expect(describe_index_target(distance)).toBe('≥0.5 ha · 5 min');
+		expect(describe_index_target(perPerson)).toBe('9 m² · 30 min');
+		expect(describe_index_target(exposure)).toBe('0.5 ha · 5 min');
 	});
 
 	it('reads the threshold for distance and the distance for the others', () => {
@@ -190,5 +194,61 @@ describe('green_type_label', () => {
 
 	it('is empty for an id it does not know', () => {
 		expect(green_type_label(42)).toBe('');
+	});
+});
+
+describe('the scorecard', () => {
+	const who = {
+		threshold: 5,
+		index: { type: AccessibilityIndexType.MINIMUM_DISTANCE, size: 0.5, distance: 5 }
+	};
+	const ipp = {
+		threshold: 9,
+		index: { type: AccessibilityIndexType.PER_PERSON, size: 0.5, distance: 30 }
+	};
+	// The live 20 steps for WHO: Turin (75% meet it) and Khujand (8%).
+	const turin = [
+		11.024, 7.641, 6.384, 5.574, 5.105, 4.7, 4.295, 3.999, 3.612, 3.259, 2.963, 2.573, 0.67, 0, 0,
+		0, 0, 0, 0, 0
+	];
+	const khujand = [
+		114.6, 114.6, 106.344, 53.882, 43.155, 35.616, 32.084, 29.319, 26.527, 23.927, 22.037, 19.84,
+		17.671, 15.404, 13.514, 11.743, 9.476, 7.31, 4.697, 0.914
+	];
+
+	it('states the goal as a sentence that follows "8% of residents"', () => {
+		expect(describe_index_goal(who)).toBe(
+			'have a green area of at least 0.5 ha within a 5-minute walk.'
+		);
+		expect(describe_index_goal(ipp)).toBe(
+			'have 9 m² of public green each within a 30-minute walk.'
+		);
+	});
+
+	it('reads the median resident out of the 20 steps', () => {
+		expect(describe_median(who, turin)).toBe('Half the residents have one within 3.1 min.');
+		expect(describe_median(who, khujand)).toBe('Half the residents walk more than 23 min to one.');
+		expect(describe_median(ipp, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30])).toBe(
+			'The median resident has 6.5 m²; the target is 9 m².'
+		);
+		expect(describe_median(who, [])).toBe('');
+	});
+
+	// p is the share of cities doing better, so a small p is a good result.
+	it('words the standing the way it reads', () => {
+		expect(standing(16)).toEqual({ label: 'Top 16%', tone: 'good' });
+		expect(standing(43)).toEqual({ label: 'Top 43%', tone: undefined });
+		expect(standing(91)).toEqual({ label: 'Bottom 9%', tone: 'bad' });
+		expect(standing(0).label).toBe('Top 1%');
+	});
+
+	it('parses the RPC profile, whose steps arrive as the text of an array', () => {
+		const profile = parse_profile({
+			WHO: { v: 0.753, p: 16, d: '[11.024, 7.641, 0.0]' },
+			IPP: { v: '0.998', p: '5', d: [233.5, 8106.98] }
+		});
+		expect(profile.WHO).toEqual({ v: 0.753, p: 16, d: [11.024, 7.641, 0] });
+		expect(profile.IPP).toEqual({ v: 0.998, p: 5, d: [233.5, 8106.98] });
+		expect(parse_profile(null)).toEqual({});
 	});
 });

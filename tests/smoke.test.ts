@@ -556,31 +556,46 @@ test.describe('ATGreen smoke', () => {
 		test('the index rows are grouped, reachable and operable by keyboard', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
-			const tiles = page.locator('button.row');
-			await expect(tiles).toHaveCount(8, { timeout: 20000 });
+			const rows = page.locator('button[data-index]');
+			await expect(rows).toHaveCount(8, { timeout: 20000 });
 
 			// The eight indexes are three different kinds of measurement, not eight
 			// peers, and the grouping comes from AccessibilityIndexType rather than
 			// from a hand-kept list — so a new index gets a group without any change
 			// here. A flat panel invited comparing WHO's 75% with IPP's 100%, which
 			// are answers to different questions in different units.
-			await expect(page.locator('.group-head')).toHaveText([
+			await expect(page.locator('section[aria-labelledby^="index-group"] h2')).toHaveText([
 				'Distance to greenspace',
 				'Green per person',
 				'Exposure'
 			]);
 
 			// Every row states its own requirement, so no index is unexplained.
-			await expect(page.locator('.row .sub').first()).not.toBeEmpty();
+			await expect(rows.first()).toContainText('≥0.5 ha · 5 min');
+			await expect(rows.first()).toContainText('75%');
 
-			// They were bare <div on:click> with an empty on:keypress, and they are
-			// the only way to change the index (WCAG 2.1.1).
-			await expect(tiles.first()).toHaveAttribute('aria-pressed', 'true');
-			await tiles.nth(3).focus();
-			await expect(tiles.nth(3)).toBeFocused();
+			// The rows are the only way to change the index (WCAG 2.1.1).
+			await expect(rows.first()).toHaveAttribute('aria-pressed', 'true');
+			await rows.nth(3).focus();
+			await expect(rows.nth(3)).toBeFocused();
 			await page.keyboard.press('Enter');
-			await expect(tiles.nth(3)).toHaveAttribute('aria-pressed', 'true');
-			await expect(tiles.first()).toHaveAttribute('aria-pressed', 'false');
+			await expect(rows.nth(3)).toHaveAttribute('aria-pressed', 'true');
+			await expect(rows.first()).toHaveAttribute('aria-pressed', 'false');
+		});
+
+		// The API's percentile is the share of cities doing BETTER. The rail printed
+		// it as an ordinal, so Turin's top-16% result on WHO read as a poor "16th".
+		test('the selected index states its standing in words, the right way round', async ({
+			page
+		}) => {
+			await stubBackend(page);
+			await page.goto('/Turin/measure');
+			await expect(page.getByText('Top 16%')).toBeVisible({ timeout: 20000 });
+			await expect(page.getByText(/Better than 84% of/)).toBeVisible();
+			// The residents' spread: twenty steps of 5%.
+			await expect(
+				page.getByRole('img', { name: /^WHO across Turin/ }).locator('rect')
+			).toHaveCount(20);
 		});
 	});
 
@@ -635,7 +650,7 @@ test.describe('ATGreen smoke', () => {
 		test('Measure stays within its violation budget', async ({ page }) => {
 			await stubBackend(page);
 			await page.goto('/Turin/measure');
-			await expect(page.locator('button.row').first()).toBeVisible({ timeout: 20000 });
+			await expect(page.locator('button[data-index]').first()).toBeVisible({ timeout: 20000 });
 
 			const { violations } = await scan(page);
 			expect(violations.length, `measure: ${describe_violations(violations)}`).toBeLessThanOrEqual(
