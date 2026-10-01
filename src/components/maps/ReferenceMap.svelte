@@ -4,24 +4,37 @@
 	 * grid up: hover feedback, a click on a cell asks Draw to greenify it, and the
 	 * camera is reported so the "After" map can follow.
 	 */
+	import type * as GeoJSON from 'geojson';
 	import type * as maplibregl from 'maplibre-gl';
-	import { createEventDispatcher } from 'svelte';
-	import { track_hover } from '../../js/map.js';
+	import type { Snippet } from 'svelte';
+	import { track_hover } from '../../js/map';
+	import type { ComputedCell } from '../../js/types';
 	import BaseMap from './BaseMap.svelte';
 
-	export let container: string;
-	export let ref: maplibregl.Map | undefined = undefined;
-	export let mapLoaded = false;
-	export let styleLoaded = false;
+	let {
+		container,
+		ref = $bindable(),
+		mapLoaded = $bindable(false),
+		ongreen,
+		oncamera,
+		children
+	}: {
+		container: string;
+		ref?: maplibregl.Map;
+		mapLoaded?: boolean;
+		/** A cell was clicked: its id, and the cell as plain GeoJSON. */
+		ongreen?: (id: number, cell: GeoJSON.Feature<GeoJSON.Geometry, ComputedCell>) => void;
+		/** The camera moved. */
+		oncamera?: (center: maplibregl.LngLat, zoom: number) => void;
+		children?: Snippet;
+	} = $props();
 
 	// Added by Draw; named here only to listen to them.
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
 
-	const dispatch = createEventDispatcher();
-
 	function wire(map: maplibregl.Map) {
-		const report = () => dispatch('camera', { center: map.getCenter(), zoom: map.getZoom() });
+		const report = () => oncamera?.(map.getCenter(), map.getZoom());
 		map.on('move', report);
 		map.on('idle', report);
 
@@ -32,16 +45,16 @@
 			if (!hit) return;
 			// Plain GeoJSON, not MapLibre's feature object: Draw draws it as a source,
 			// and the map's worker cannot serialise the class ("unregistered class").
-			const feature = {
+			const properties = hit.properties as ComputedCell;
+			ongreen?.(properties.id, {
 				type: 'Feature',
 				geometry: hit.geometry,
-				properties: { ...hit.properties }
-			};
-			dispatch('new_green_cell', { cellid: hit.properties.id, feature });
+				properties: { ...properties }
+			});
 		});
 	}
 </script>
 
-<BaseMap {container} bind:ref bind:mapLoaded bind:styleLoaded onload={wire}>
-	<slot />
+<BaseMap {container} bind:ref bind:mapLoaded onload={wire}>
+	{@render children?.()}
 </BaseMap>

@@ -14,9 +14,9 @@
 export const AV_COLOR_GREEN = [26, 152, 80];
 export const AV_COLOR_RED = [215, 48, 39];
 export const AV_COLOR_MID = [255, 255, 191];
-export const ACOLOR_GREEN: string = ToHEX(AV_COLOR_GREEN);
-export const ACOLOR_RED: string = ToHEX(AV_COLOR_RED);
-export const ACOLOR_MID: string = ToHEX(AV_COLOR_MID);
+export const ACOLOR_GREEN: string = to_hex(AV_COLOR_GREEN);
+export const ACOLOR_RED: string = to_hex(AV_COLOR_RED);
+export const ACOLOR_MID: string = to_hex(AV_COLOR_MID);
 
 export const TEXT_MAP_COLOR = '#BBBBBB';
 export const BOUNDARY_MAP_COLOR = '#212125';
@@ -26,6 +26,6 @@ function componentToHex(c: number): string {
 	return hex.length == 1 ? '0' + hex : hex;
 }
 
-export function ToHEX(rgb: number[]): string {
+export function to_hex(rgb: number[]): string {
 	return '#' + componentToHex(rgb[0]) + componentToHex(rgb[1]) + componentToHex(rgb[2]);
 }

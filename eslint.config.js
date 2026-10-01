@@ -41,7 +41,11 @@ export default ts.config(
 			// The base rule reports the same thing without crashing; revisit when the
 			// plugin fixes it.
 			'@typescript-eslint/no-unused-vars': 'off',
-			'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^\\$\\$' }]
+			'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^\\$\\$' }],
+			// Writing a `$bindable()` prop is how a component hands a value back to its
+			// parent (`map = ref = created`), which this core rule cannot see: it reads
+			// every such write as dead.
+			'no-useless-assignment': 'off'
 		}
 	},
 	{

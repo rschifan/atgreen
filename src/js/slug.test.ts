@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { cityLabel, cityMatches, findCityByParam, safeDecode, toCityPath, toSlug } from './slug';
+import {
+	city_label,
+	city_matches,
+	find_city_by_param,
+	safe_decode,
+	to_city_path,
+	to_slug
+} from './slug';
 
 const feature = (name: string) => ({ properties: { name } });
 
-describe('safeDecode', () => {
+describe('safe_decode', () => {
 	it('decodes ordinary escapes', () => {
-		expect(safeDecode('W%C3%BCrzburg')).toBe('Würzburg');
-		expect(safeDecode('Turin')).toBe('Turin');
+		expect(safe_decode('W%C3%BCrzburg')).toBe('Würzburg');
+		expect(safe_decode('Turin')).toBe('Turin');
 	});
 
 	// A lone % is a legal URL character but not a legal escape. The not-found
@@ -14,127 +21,127 @@ describe('safeDecode', () => {
 	// crashed page where a "no such city" message belongs.
 	it('returns the input rather than throwing on a malformed escape', () => {
 		expect(() => decodeURIComponent('%')).toThrow();
-		expect(safeDecode('%')).toBe('%');
-		expect(safeDecode('%zz')).toBe('%zz');
-		expect(safeDecode('100%')).toBe('100%');
+		expect(safe_decode('%')).toBe('%');
+		expect(safe_decode('%zz')).toBe('%zz');
+		expect(safe_decode('100%')).toBe('100%');
 	});
 });
 
-describe('toCityPath', () => {
+describe('to_city_path', () => {
 	it('leaves plain names alone', () => {
-		expect(toCityPath('Turin')).toBe('Turin');
-		expect(toCityPath('Los_Angeles')).toBe('Los_Angeles');
+		expect(to_city_path('Turin')).toBe('Turin');
+		expect(to_city_path('Los_Angeles')).toBe('Los_Angeles');
 	});
 
 	it('percent-encodes what a path segment cannot carry', () => {
-		expect(toCityPath('Würzburg')).toBe('W%C3%BCrzburg');
-		expect(toCityPath('A_Coruña')).toBe('A_Coru%C3%B1a');
+		expect(to_city_path('Würzburg')).toBe('W%C3%BCrzburg');
+		expect(to_city_path('A_Coruña')).toBe('A_Coru%C3%B1a');
 	});
 
 	it('round-trips through the resolver', () => {
 		const features = [feature('Los_Ángeles'), feature('Los_Angeles')];
 		for (const f of features) {
-			expect(findCityByParam(features, toCityPath(f.properties.name))).toBe(f);
+			expect(find_city_by_param(features, to_city_path(f.properties.name))).toBe(f);
 		}
 	});
 });
 
-describe('findCityByParam', () => {
+describe('find_city_by_param', () => {
 	const features = [feature('Turin'), feature('Würzburg'), feature('A_Coruña')];
 
 	it('finds a city by its exact encoded name', () => {
-		expect(findCityByParam(features, 'W%C3%BCrzburg')?.properties.name).toBe('Würzburg');
+		expect(find_city_by_param(features, 'W%C3%BCrzburg')?.properties.name).toBe('Würzburg');
 	});
 
 	it('accepts a differently-cased name', () => {
-		expect(findCityByParam(features, 'turin')?.properties.name).toBe('Turin');
-		expect(findCityByParam(features, 'TURIN')?.properties.name).toBe('Turin');
+		expect(find_city_by_param(features, 'turin')?.properties.name).toBe('Turin');
+		expect(find_city_by_param(features, 'TURIN')?.properties.name).toBe('Turin');
 	});
 
 	it('accepts a hand-typed ASCII slug', () => {
-		expect(findCityByParam(features, 'wurzburg')?.properties.name).toBe('Würzburg');
-		expect(findCityByParam(features, 'a-coruna')?.properties.name).toBe('A_Coruña');
+		expect(find_city_by_param(features, 'wurzburg')?.properties.name).toBe('Würzburg');
+		expect(find_city_by_param(features, 'a-coruna')?.properties.name).toBe('A_Coruña');
 	});
 
 	// The reason links are built from the name and not a slug: these two differ
 	// only by an accent, and the real dataset contains three such pairs.
 	it('keeps accent-differing names distinct when given the exact name', () => {
 		const pair = [feature('Los_Angeles'), feature('Los_Ángeles')];
-		expect(findCityByParam(pair, 'Los_Angeles')?.properties.name).toBe('Los_Angeles');
-		expect(findCityByParam(pair, 'Los_%C3%81ngeles')?.properties.name).toBe('Los_Ángeles');
+		expect(find_city_by_param(pair, 'Los_Angeles')?.properties.name).toBe('Los_Angeles');
+		expect(find_city_by_param(pair, 'Los_%C3%81ngeles')?.properties.name).toBe('Los_Ángeles');
 	});
 
 	it('returns undefined rather than throwing on junk', () => {
-		expect(findCityByParam(features, 'atlantis')).toBeUndefined();
-		expect(findCityByParam([], 'turin')).toBeUndefined();
-		expect(findCityByParam(undefined as unknown as [], 'turin')).toBeUndefined();
-		expect(findCityByParam(features, '')).toBeUndefined();
+		expect(find_city_by_param(features, 'atlantis')).toBeUndefined();
+		expect(find_city_by_param([], 'turin')).toBeUndefined();
+		expect(find_city_by_param(undefined as unknown as [], 'turin')).toBeUndefined();
+		expect(find_city_by_param(features, '')).toBeUndefined();
 		// A lone % is not a valid escape; decodeURIComponent throws on it.
-		expect(() => findCityByParam(features, '%')).not.toThrow();
+		expect(() => find_city_by_param(features, '%')).not.toThrow();
 	});
 
 	// A name with no ASCII form at all still resolves, because step 1 never
 	// reduces it. Slugging alone would have made this city unreachable.
 	it('resolves a name that has no ASCII reduction', () => {
 		const fa = [feature('بوکان')];
-		expect(toSlug('بوکان')).toBe('');
-		expect(findCityByParam(fa, toCityPath('بوکان'))?.properties.name).toBe('بوکان');
+		expect(to_slug('بوکان')).toBe('');
+		expect(find_city_by_param(fa, to_city_path('بوکان'))?.properties.name).toBe('بوکان');
 	});
 });
 
-describe('toSlug', () => {
+describe('to_slug', () => {
 	it('folds combining accents', () => {
-		expect(toSlug('Würzburg')).toBe('wurzburg');
-		expect(toSlug('Genève')).toBe('geneve');
+		expect(to_slug('Würzburg')).toBe('wurzburg');
+		expect(to_slug('Genève')).toBe('geneve');
 	});
 
 	// Stroked and ligature letters have no NFD form, so without the lookup table
 	// they would be deleted outright rather than transliterated.
 	it('transliterates letters NFD cannot decompose', () => {
-		expect(toSlug('Łódź')).toBe('lodz');
-		expect(toSlug('Køge')).toBe('koge');
-		expect(toSlug('Straße')).toBe('strasse');
+		expect(to_slug('Łódź')).toBe('lodz');
+		expect(to_slug('Køge')).toBe('koge');
+		expect(to_slug('Straße')).toBe('strasse');
 	});
 
 	it('collapses punctuation and trims', () => {
-		expect(toSlug("Reggio nell'Emilia")).toBe('reggio-nell-emilia');
-		expect(toSlug('Los_Angeles')).toBe('los-angeles');
-		expect(toSlug('  Bad   Ems  ')).toBe('bad-ems');
+		expect(to_slug("Reggio nell'Emilia")).toBe('reggio-nell-emilia');
+		expect(to_slug('Los_Angeles')).toBe('los-angeles');
+		expect(to_slug('  Bad   Ems  ')).toBe('bad-ems');
 	});
 
 	it('returns empty for input with no ASCII content', () => {
-		expect(toSlug('')).toBe('');
-		expect(toSlug(undefined as unknown as string)).toBe('');
-		expect(toSlug('---')).toBe('');
+		expect(to_slug('')).toBe('');
+		expect(to_slug(undefined as unknown as string)).toBe('');
+		expect(to_slug('---')).toBe('');
 	});
 });
 
-describe('cityLabel', () => {
+describe('city_label', () => {
 	it('shows underscores as spaces, and leaves everything else alone', () => {
-		expect(cityLabel('Newcastle_upon_Tyne')).toBe('Newcastle upon Tyne');
-		expect(cityLabel('Bolzano_-_Bozen')).toBe('Bolzano - Bozen');
-		expect(cityLabel('Alacant__Alicante')).toBe('Alacant / Alicante');
-		expect(cityLabel('Turin')).toBe('Turin');
-		expect(cityLabel('بوكان')).toBe('بوكان');
+		expect(city_label('Newcastle_upon_Tyne')).toBe('Newcastle upon Tyne');
+		expect(city_label('Bolzano_-_Bozen')).toBe('Bolzano - Bozen');
+		expect(city_label('Alacant__Alicante')).toBe('Alacant / Alicante');
+		expect(city_label('Turin')).toBe('Turin');
+		expect(city_label('بوكان')).toBe('بوكان');
 	});
 });
 
-describe('cityMatches', () => {
+describe('city_matches', () => {
 	it('ignores case, accents and spaces-vs-underscores', () => {
-		expect(cityMatches('New_York', 'new york')).toBe(true);
-		expect(cityMatches('São_Paulo', 'sao paulo')).toBe(true);
-		expect(cityMatches('São_Paulo', 'São Paulo')).toBe(true);
-		expect(cityMatches('Łódź', 'lodz')).toBe(true);
-		expect(cityMatches('Turin', 'TUR')).toBe(true);
+		expect(city_matches('New_York', 'new york')).toBe(true);
+		expect(city_matches('São_Paulo', 'sao paulo')).toBe(true);
+		expect(city_matches('São_Paulo', 'São Paulo')).toBe(true);
+		expect(city_matches('Łódź', 'lodz')).toBe(true);
+		expect(city_matches('Turin', 'TUR')).toBe(true);
 	});
 
 	it('matches a non-Latin name in its own script', () => {
-		expect(cityMatches('بوكان', 'بوك')).toBe(true);
+		expect(city_matches('بوكان', 'بوك')).toBe(true);
 	});
 
 	it('does not match an empty query or a different city', () => {
-		expect(cityMatches('Turin', '')).toBe(false);
-		expect(cityMatches('Turin', '   ')).toBe(false);
-		expect(cityMatches('Turin', 'milan')).toBe(false);
+		expect(city_matches('Turin', '')).toBe(false);
+		expect(city_matches('Turin', '   ')).toBe(false);
+		expect(city_matches('Turin', 'milan')).toBe(false);
 	});
 });

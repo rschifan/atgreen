@@ -14,7 +14,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { cn } from '$lib/utils.js';
 	import { get_city_profile } from '../../js/api';
-	import { cityLabel } from '../../js/slug';
+	import { city_label } from '../../js/slug';
 	import {
 		INDEX_GROUP_LABEL,
 		INDEX_GROUP_ORDER,
@@ -157,7 +157,7 @@
 						steps={result.d}
 						type={target.index.type}
 						threshold={target.threshold}
-						label="{selected} across {cityLabel($current_city?.text ?? '')}: {describe_median(
+						label="{selected} across {city_label($current_city?.text ?? '')}: {describe_median(
 							target,
 							result.d
 						)}"

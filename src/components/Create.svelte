@@ -1,66 +1,60 @@
 <script lang="ts">
 	import PlayIcon from '@lucide/svelte/icons/play';
-	import type * as GeoJSON from 'geojson';
-	import { format, max, min } from 'd3';
-	import { toast } from 'svelte-sonner';
+	import { format } from 'd3';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { get_custom_index } from '../js/api';
-	import { cityLabel } from '../js/slug';
-	import { AccessibilityIndexType, DEFAULT_TARGET, INDEX_UNIT } from '../js/types';
+	import { extent } from '../js/layers';
+	import { toast_no_index } from '../js/notify';
+	import {
+		AccessibilityIndexType,
+		DEFAULT_TARGET,
+		INDEX_UNIT,
+		type ComputedGrid
+	} from '../js/types';
 	import { get_green_types_code } from '../js/utils';
 	import { current_city, loading } from '../stores/stores';
+	import IndexParamsFields from './fields/IndexParamsFields.svelte';
+	import RangeField from './fields/RangeField.svelte';
 	import CreateMap from './maps/CreateMap.svelte';
 	import Legend from './plotting/Legend.svelte';
 	import ToolPane from './ToolPane.svelte';
-	import GreenTypesField from './fields/GreenTypesField.svelte';
-	import IndexTypeField from './fields/IndexTypeField.svelte';
-	import RangeField from './fields/RangeField.svelte';
-	import TimeBudgetField from './fields/TimeBudgetField.svelte';
 
-	let current_index_type = AccessibilityIndexType.MINIMUM_DISTANCE;
-	let current_green_types = ['parks', 'forests', 'grass'];
-	let current_time_budget = 5;
-	let current_greenarea_size = 0.5;
-	let current_target: number;
+	let type = $state(AccessibilityIndexType.MINIMUM_DISTANCE);
+	let green_types = $state(['parks', 'forests', 'grass']);
+	let size = $state(0.5);
+	let time = $state(5);
+	let target = $state(DEFAULT_TARGET[AccessibilityIndexType.MINIMUM_DISTANCE]);
 
-	let data: GeoJSON.FeatureCollection | undefined;
+	let data = $state.raw<ComputedGrid>();
 	/*
 		The parameters `data` was built with. The map, legend and target read these,
 		not the rail: changing the rail after a run used to re-label the result on
 		screen with the new type's units and colours, over the old type's numbers.
 	*/
-	let shown: { type: AccessibilityIndexType; size: number; time: number } | undefined;
+	let shown = $state<{ type: AccessibilityIndexType; size: number; time: number }>();
 
 	// Another city's result does not belong on this one.
-	$: if ($current_city) data = undefined;
+	$effect(() => {
+		if ($current_city) data = undefined;
+	});
 
-	$: values = data?.features.map((f) => f.properties?.v as number) ?? [];
-	$: lower_is_better = shown?.type === AccessibilityIndexType.MINIMUM_DISTANCE;
-	$: share =
-		values.filter((v) => (lower_is_better ? v <= current_target : v >= current_target)).length /
-		(values.length || 1);
-
-	// An index that came back empty, or a request that failed, is said once in a
-	// toast rather than left as a notification block in the rail.
-	function no_index() {
-		toast.error('No index generated', {
-			description: `No park with these characteristics found in ${cityLabel($current_city?.text)}.`
-		});
-	}
+	const values = $derived(data?.features.map((f) => f.properties.v) ?? []);
+	const range = $derived(extent(values));
+	const share = $derived.by(() => {
+		const meets = (v: number) =>
+			shown?.type === AccessibilityIndexType.MINIMUM_DISTANCE ? v <= target : v >= target;
+		return values.filter(meets).length / (values.length || 1);
+	});
 
 	async function compute() {
 		data = undefined;
 		// An empty green-type selection has no code; refuse it rather than ask the
 		// API for every type, which is what it used to fall back to.
-		const green_code = get_green_types_code(current_green_types);
-		if (!$current_city || green_code === undefined) return no_index();
+		const green_code = get_green_types_code(green_types);
+		if (!$current_city || green_code === undefined) return toast_no_index($current_city?.text);
 
-		const params = {
-			type: current_index_type,
-			size: current_greenarea_size,
-			time: current_time_budget
-		};
+		const params = { type, size, time };
 		loading.set(true);
 		try {
 			const result = await get_custom_index(
@@ -70,12 +64,12 @@
 				params.time,
 				green_code
 			);
-			if (!result) return no_index();
+			if (!result) return toast_no_index($current_city.text);
 			shown = params;
-			current_target = DEFAULT_TARGET[params.type];
+			target = DEFAULT_TARGET[params.type];
 			data = result;
 		} catch (error) {
-			no_index();
+			toast_no_index($current_city.text);
 			console.error('Create: index request failed', error);
 		} finally {
 			loading.set(false);
@@ -84,24 +78,8 @@
 </script>
 
 <ToolPane>
-	<svelte:fragment slot="rail">
-		<IndexTypeField bind:value={current_index_type} />
-		<GreenTypesField
-			bind:value={current_green_types}
-			disabled={current_index_type === AccessibilityIndexType.EXPOSURE}
-		/>
-		<RangeField
-			title="Minimum size"
-			unit="ha"
-			min={0.5}
-			max={50}
-			step={0.5}
-			bind:value={current_greenarea_size}
-		/>
-		<TimeBudgetField
-			bind:value={current_time_budget}
-			disabled={current_index_type === AccessibilityIndexType.MINIMUM_DISTANCE}
-		/>
+	{#snippet rail()}
+		<IndexParamsFields bind:type bind:green_types bind:size bind:time />
 
 		<Button disabled={!$current_city} onclick={compute}><PlayIcon /> Create</Button>
 
@@ -109,15 +87,15 @@
 			<RangeField
 				title="Target"
 				unit={INDEX_UNIT[shown.type]}
-				min={Math.floor(min(values) ?? 0)}
-				max={Math.floor(max(values) ?? 0)}
-				bind:value={current_target}
+				min={Math.floor(range.min)}
+				max={Math.floor(range.max)}
+				bind:value={target}
 			/>
 			<Badge variant="outline" class="self-start border-primary/40 text-primary">
 				{format('.1%')(share)} of cells meet the target
 			</Badge>
 		{/if}
-	</svelte:fragment>
+	{/snippet}
 
 	{#if data && shown}
 		<CreateMap
@@ -126,24 +104,15 @@
 			index_type={shown.type}
 			size={shown.size}
 			distance={shown.time}
-			threshold={current_target}
+			threshold={target}
 		>
-			<Legend {values} type={shown.type} threshold={current_target} />
+			<Legend {values} type={shown.type} threshold={target} />
 		</CreateMap>
 	{:else}
-		<p class="empty">Choose your parameters and press Create.</p>
+		<p
+			class="absolute inset-0 m-0 flex items-center justify-center p-4 text-center text-muted-foreground"
+		>
+			Choose your parameters and press Create.
+		</p>
 	{/if}
 </ToolPane>
-
-<style>
-	.empty {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: var(--muted-foreground);
-		text-align: center;
-		padding: 1rem;
-	}
-</style>

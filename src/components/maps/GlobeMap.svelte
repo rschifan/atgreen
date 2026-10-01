@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { BASEMAP_STYLE, maplibregl } from '../../js/map.js';
-	import { current_city } from '../../stores/stores.js';
+	import { onMount, onDestroy, untrack } from 'svelte';
+	import { BASEMAP_STYLE, maplibregl } from '../../js/map';
+	import { current_city } from '../../stores/stores';
 	import { globe_style } from '../../stores/settings';
 
 	onMount(() => {
-		init();
+		map = init();
 	});
 
 	onDestroy(() => {
@@ -20,37 +20,29 @@
 		if (frame) cancelAnimationFrame(frame);
 	});
 
-	let map: maplibregl.Map;
+	let {
+		container,
+		ref = $bindable(),
+		mapLoaded = $bindable(false),
+		styleLoaded = $bindable(false),
+		userInteracting = $bindable(false),
+		clear_top = 0
+	}: {
+		container: string;
+		ref?: maplibregl.Map;
+		mapLoaded?: boolean;
+		styleLoaded?: boolean;
+		/** True while someone is dragging, touching or pointing at a city: no spin. */
+		userInteracting?: boolean;
+		/** The y (px) where the text above the globe ends. */
+		clear_top?: number;
+	} = $props();
 
-	export let mapLoaded = false;
-	export let styleLoaded = false;
-	export let container: string;
-	export let ref;
-	export let userInteracting = false;
-	// The y (px) where the text above the globe ends.
-	export let clear_top = 0;
+	let map = $state.raw<maplibregl.Map>();
 
-	const default_map_properties: maplibregl.MapOptions = {
-		container: container,
-		style: BASEMAP_STYLE,
-		center: [2.1686, 41.390205],
-		zoom: 0.5,
-		bearing: 0,
-		pitch: 0,
-		// The CSS glow is a circle, which is the globe's outline only when it is
-		// seen head-on. Tilted, the outline shifts off-centre and the ring would
-		// visibly slide off the edge.
-		maxPitch: 0,
-		attributionControl: { compact: true }
-		// No `projection` here: MapLibre takes it from the style, or from
-		// setProjection() once the style has loaded — see 'style.load' below.
-	};
-
-	let props: maplibregl.MapOptions = default_map_properties;
-
-	let width = 0;
-	let height = 0;
-	let root: HTMLDivElement;
+	let width = $state(0);
+	let height = $state(0);
+	let root = $state<HTMLDivElement>();
 	let frame = 0;
 	let spinEnabled = true;
 	// The zoom fit() chose for this window. The spin slows and stops relative to
@@ -86,7 +78,9 @@
 	}
 
 	// The text above can wrap to a new height after the map has loaded.
-	$: if (mapLoaded && clear_top) fit();
+	$effect(() => {
+		if (mapLoaded && clear_top) untrack(fit);
+	});
 
 	/*
 		The globe's centre and radius ON SCREEN, measured rather than computed.
@@ -101,6 +95,7 @@
 		limb land back inside the disc rather than further out. Public API only.
 	*/
 	function measure() {
+		if (!map) return { x: 0, y: 0, r: 0 };
 		const c = map.getCenter();
 		const lat0 = (c.lat * Math.PI) / 180;
 		const o = map.project(c);
@@ -124,6 +119,7 @@
 	// than 2× per zoom level under perspective, so correct a few times, measuring
 	// each pass; it converges to well under a pixel.
 	function fit() {
+		if (!map) return;
 		const { padding, radius } = framing(width, height);
 		map.setPadding(padding);
 		// Free the zoom range while fitting; it is set again from the new home below.
@@ -157,7 +153,7 @@
 		[0.6, 331, 347],
 		[1, 523, 487]
 	] as const;
-	let stars: HTMLDivElement[] = [];
+	let stars: HTMLDivElement[] = $state([]);
 
 	// Everything drawn around the map follows the camera: the glow is placed on the
 	// measured globe, and the stars are shifted by the centre's longitude/latitude.
@@ -198,7 +194,7 @@
 		further on the same tiles, which is fine for the second it lasts.
 	*/
 	const KEEP = new Set(['background', 'water', 'boundary_country_z0-4', 'boundary_country_z5-']);
-	function dress_globe() {
+	function dress_globe(map: maplibregl.Map) {
 		for (const layer of map.getStyle().layers) {
 			if (!KEEP.has(layer.id)) map.setLayoutProperty(layer.id, 'visibility', 'none');
 		}
@@ -241,15 +237,33 @@
 		);
 	}
 
-	$: userInteracting = $current_city ? true : false;
+	// A chosen city holds the globe still while the page moves on.
+	$effect(() => {
+		userInteracting = !!$current_city;
+	});
 
 	// Resume the spin when an interaction ends with the globe at rest — letting go
 	// of a hovered city fires no 'moveend' to restart it.
-	$: if (mapLoaded && !userInteracting) spin_soon();
+	$effect(() => {
+		if (mapLoaded && !userInteracting) spin_soon();
+	});
 
 	function init() {
-		if (props) map = new maplibregl.Map(props);
-		else map = new maplibregl.Map(default_map_properties);
+		const map = new maplibregl.Map({
+			container: container,
+			style: BASEMAP_STYLE,
+			center: [2.1686, 41.390205],
+			zoom: 0.5,
+			bearing: 0,
+			pitch: 0,
+			// The CSS glow is a circle, which is the globe's outline only when it is
+			// seen head-on. Tilted, the outline shifts off-centre and the ring would
+			// visibly slide off the edge.
+			maxPitch: 0,
+			attributionControl: { compact: true }
+			// No `projection` here: MapLibre takes it from the style, or from
+			// setProjection() once the style has loaded — see 'style.load' below.
+		});
 
 		map.on('style.load', () => {
 			// Mapbox accepted `projection: 'globe'` in the constructor. MapLibre
@@ -257,7 +271,7 @@
 			// in place — setting it earlier is silently overwritten by the style's
 			// own (mercator) default.
 			map.setProjection({ type: 'globe' });
-			dress_globe();
+			dress_globe(map);
 			styleLoaded = true;
 		});
 
@@ -313,6 +327,7 @@
 		});
 
 		ref = map;
+		return map;
 	}
 	/*
 		Every spin starts one microtask late, never inside a MapLibre event.
@@ -350,7 +365,9 @@
 	}
 	// ##############################################################################
 
-	$: if (width && map) map.resize();
+	$effect(() => {
+		if (width && map) map.resize();
+	});
 </script>
 
 <div
@@ -369,10 +386,6 @@
 
 	{#if mapLoaded}
 		<div class="shade" aria-hidden="true"></div>
-	{/if}
-
-	{#if map}
-		<slot />
 	{/if}
 </div>
 

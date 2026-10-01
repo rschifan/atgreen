@@ -50,12 +50,10 @@ export const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
 */
 export const LABEL_FONT = ['Noto Sans Regular'];
 
-/**
- * @param {string} container
- * @param {import('maplibre-gl').LngLatLike} center
- * @returns {import('maplibre-gl').MapOptions}
- */
-export function get_default_map_props(container, center) {
+export function get_default_map_props(
+	container: string,
+	center: maplibregl.LngLatLike
+): maplibregl.MapOptions {
 	return {
 		style: BASEMAP_STYLE,
 		zoom: 10,
@@ -87,16 +85,17 @@ export function hover_popup() {
  * This replaces four hand-written copies, which kept the hovered id in a
  * variable seeded with 0 and read 0 as "nothing hovered" — but `generateId`
  * numbers features from 0, so the first feature's hover state never cleared.
- *
- * @param {maplibregl.Map} map
- * @param {string} layer
- * @param {string} source
- * @param {(feature: maplibregl.MapGeoJSONFeature | undefined, event?: maplibregl.MapLayerMouseEvent) => void} [on_change]
- * @returns {{ clear: () => void }}
  */
-export function track_hover(map, layer, source, on_change) {
-	/** @type {string | number | undefined} */
-	let hovered;
+export function track_hover(
+	map: maplibregl.Map,
+	layer: string,
+	source: string,
+	on_change?: (
+		feature: maplibregl.MapGeoJSONFeature | undefined,
+		event?: maplibregl.MapLayerMouseEvent
+	) => void
+): { clear: () => void } {
+	let hovered: string | number | undefined;
 	const clear = () => {
 		if (hovered !== undefined && map.getSource(source))
 			map.setFeatureState({ source, id: hovered }, { hover: false });

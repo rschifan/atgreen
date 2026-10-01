@@ -5,7 +5,7 @@ ATGreen draws its data with [MapLibre GL JS](https://maplibre.org) on
 free, with no API key, no account and no usage limits. It replaced Mapbox in
 September 2026.
 
-The whole configuration is one line in `src/js/map.js`:
+The whole configuration is one line in `src/js/map.ts`:
 
 ```js
 export const BASEMAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';
@@ -68,7 +68,7 @@ Measured with `pmtiles extract --dry-run` against the Protomaps build of 2026-09
 The city-clipped extract plus the low-zoom world is the right shape: the app never shows
 street detail anywhere but its cities. It would need a `/basemap/` location in nginx
 serving the files with HTTP range requests, the `pmtiles` protocol registered in
-`src/js/map.js`, and a style whose sprite and glyph URLs are **absolute** — MapLibre 6
+`src/js/map.ts`, and a style whose sprite and glyph URLs are **absolute** — MapLibre 6
 rejects a relative sprite URL outright.
 
 On `ghsci`, put any such files on `/mnt/work`, never the root filesystem: `/` was 95%

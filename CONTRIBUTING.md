@@ -53,13 +53,17 @@ CI runs exactly these.
   rail could use it.
 - **One map shell.** `BaseMap.svelte` is the only component that creates a map; a view
   wraps it and adds its layers in `onstyle` or `onload`. Hover feedback is `track_hover`
-  (`src/js/map.js`), the hide and fit buttons are `LayerControls`, the ramp is `Legend`,
+  (`src/js/map.ts`), the hide and fit buttons are `LayerControls`, the ramp is `Legend`,
   and popups take their look from `app.css`.
 - **Colours are tokens.** The theme lives in `src/app.css`; use `bg-primary`,
   `text-muted-foreground`, `var(--border)` and the like, not hex values. Map paint
   properties are the exception: MapLibre cannot read CSS variables.
-- **New components use runes** (`$props`, `$state`, `$derived`). Older ones are still in
-  legacy mode; Svelte 5 decides per component, so convert a file whole or not at all.
+- **Svelte 5 runes, throughout.** `$props`, `$state`, `$derived`, `$effect`, snippets and
+  callback props; `page` from `$app/state`. The Svelte 4 forms (`export let`, `$:`, slots,
+  `createEventDispatcher`, `on:`) are gone. A map, or GeoJSON of thousands of features,
+  goes in `$state.raw`: plain `$state` would wrap every feature in a proxy.
+- **One naming style for the app's helpers:** snake_case (`city_label`, `track_hover`).
+  `src/lib/components/ui` is shadcn's code and keeps its own.
 - **Import icons one by one** (`@lucide/svelte/icons/search`), so only the icons used ship.
 
 ## Commit messages

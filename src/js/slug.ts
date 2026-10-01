@@ -26,7 +26,7 @@ export type NamedFeature = { properties?: { name?: string } };
  * would take the raw `decodeURIComponent` down with a URIError — turning a
  * "no such city" notice into a crashed page.
  */
-export function safeDecode(value: string): string {
+export function safe_decode(value: string): string {
 	try {
 		return decodeURIComponent(value);
 	} catch {
@@ -39,7 +39,7 @@ export function safeDecode(value: string): string {
  * underscores for spaces ("Newcastle_upon_Tyne"); every place a name is shown
  * goes through this, while URLs and API calls keep the name as it is.
  */
-export function cityLabel(name: string): string {
+export function city_label(name: string): string {
 	// A double underscore is a bilingual name's slash: "Alacant__Alicante" is
 	// the city officially called "Alacant / Alicante".
 	return String(name ?? '')
@@ -53,18 +53,18 @@ export function cityLabel(name: string): string {
  * "São_Paulo", "new york" finds "New_York" — and a name in a non-Latin script
  * still matches when typed in that script.
  */
-export function cityMatches(name: string, query: string): boolean {
+export function city_matches(name: string, query: string): boolean {
 	const q = String(query ?? '')
 		.trim()
 		.toLowerCase();
 	if (!q) return false;
-	if (cityLabel(name).toLowerCase().includes(q.replaceAll('_', ' '))) return true;
-	const slug = toSlug(q);
-	return slug !== '' && toSlug(name).includes(slug);
+	if (city_label(name).toLowerCase().includes(q.replaceAll('_', ' '))) return true;
+	const slug = to_slug(q);
+	return slug !== '' && to_slug(name).includes(slug);
 }
 
 /** The path segment for a city. Percent-encoded; browsers show it decoded. */
-export function toCityPath(name: string): string {
+export function to_city_path(name: string): string {
 	return encodeURIComponent(String(name ?? ''));
 }
 
@@ -72,7 +72,7 @@ export function toCityPath(name: string): string {
  * A URL-safe ASCII reduction, used only to match loosely-typed input.
  * Not used to build links -- see the note above.
  */
-export function toSlug(name: string): string {
+export function to_slug(name: string): string {
 	return String(name ?? '')
 		.replace(/[łŁøØđĐæÆœŒßþÞðÐ]/g, (c) => STROKED[c] ?? c)
 		.normalize('NFD') // split an accented letter into base + combining mark...
@@ -115,12 +115,12 @@ const STROKED: Record<string, string> = {
  * Only step 3 can be ambiguous, and only for those three pairs; links the app
  * generates always hit step 1, so ambiguity needs a hand-typed URL.
  */
-export function findCityByParam<T extends NamedFeature>(features: T[], param: string) {
+export function find_city_by_param<T extends NamedFeature>(features: T[], param: string) {
 	if (!Array.isArray(features) || !param) return undefined;
 
 	// A malformed %-escape is a bad URL, not a crash: fall through on the raw
 	// text and let the looser matches below have a go at it.
-	const decoded = safeDecode(String(param));
+	const decoded = safe_decode(String(param));
 
 	const name = (f: NamedFeature) => f?.properties?.name;
 
@@ -131,7 +131,7 @@ export function findCityByParam<T extends NamedFeature>(features: T[], param: st
 	const insensitive = features.find((f) => String(name(f) ?? '').toLowerCase() === lower);
 	if (insensitive) return insensitive;
 
-	const wanted = toSlug(decoded);
+	const wanted = to_slug(decoded);
 	if (!wanted) return undefined;
-	return features.find((f) => toSlug(name(f) ?? '') === wanted);
+	return features.find((f) => to_slug(name(f) ?? '') === wanted);
 }

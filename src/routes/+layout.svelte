@@ -2,18 +2,24 @@
 	// Tailwind and the theme the shadcn-svelte components are built on.
 	import '../app.css';
 
-	import { useRequest } from 'alova';
+	import { onMount, type Snippet } from 'svelte';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
 	import { Spinner } from '$lib/components/ui/spinner/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import AppHeader from '../components/AppHeader.svelte';
 	import { get_cities_metadata } from '../js/api';
-	import { cities, loading } from '../stores/stores.js';
+	import { cities, loading } from '../stores/stores';
+
+	let { children }: { children: Snippet } = $props();
 
 	// One request for the whole app; the header's search and the [city] layout
 	// both read the same store rather than fetching the list again.
-	const { data } = useRequest(get_cities_metadata, { initialData: [] });
-	$: cities.set($data);
+	onMount(() => {
+		get_cities_metadata.send().then(
+			(list) => cities.set(list),
+			(error) => console.error('The city list did not load', error)
+		);
+	});
 </script>
 
 <!-- Tooltips anywhere in the app share one provider (open delay, one at a time). -->
@@ -21,7 +27,7 @@
 	<AppHeader />
 
 	<main id="main-content" class="app-main">
-		<slot />
+		{@render children()}
 	</main>
 
 	{#if $loading}

@@ -3,17 +3,22 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-
 	import { apply_globe_style } from '../../js/globe_styles';
-	import { LABEL_FONT, maplibregl } from '../../js/map';
-	import { cityLabel, toCityPath } from '../../js/slug';
+	import { LABEL_FONT, maplibregl, track_hover } from '../../js/map';
+	import { city_label, to_city_path } from '../../js/slug';
+	import type { CityCollection } from '../../js/types';
 	import { globe_style } from '../../stores/settings';
 
-	export let map: maplibregl.Map;
-	export let data: GeoJSON.FeatureCollection;
-	export let userInteracting: boolean;
-
-	const empty_geojson: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+	let {
+		map,
+		data,
+		userInteracting = $bindable(false)
+	}: {
+		map: maplibregl.Map;
+		data: CityCollection;
+		/** Held true while the pointer is on a city, so the globe stops spinning under it. */
+		userInteracting?: boolean;
+	} = $props();
 	const SUMMARY_SOURCE = 'SUMMARY_SOURCE';
 	// The hit target round each city, invisible until hovered: a 2px dot is too
 	// small to point at, this is not. Hovered, it glows green.
@@ -23,7 +28,6 @@
 
 	const hover: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'hover'], false];
 
-	let hovered_id: string | number | undefined;
 	// Stops whatever the globe style keeps running (the pings animation).
 	let stop_style = () => {};
 
@@ -35,25 +39,16 @@
 		className: 'city-tip'
 	});
 
-	function set_hover(id: string | number | undefined) {
-		if (hovered_id !== undefined)
-			map.setFeatureState({ source: SUMMARY_SOURCE, id: hovered_id }, { hover: false });
-		hovered_id = id;
-		if (id !== undefined) map.setFeatureState({ source: SUMMARY_SOURCE, id }, { hover: true });
-	}
-
 	onMount(() => {
 		// Each city also carries its name as it reads — "Newcastle upon Tyne",
 		// not the API's "Newcastle_upon_Tyne" — for the labels.
-		const cities: GeoJSON.FeatureCollection = data
-			? {
-					...data,
-					features: data.features.map((f) => ({
-						...f,
-						properties: { ...f.properties, label: cityLabel(f.properties?.name) }
-					}))
-				}
-			: empty_geojson;
+		const cities: GeoJSON.FeatureCollection = {
+			...data,
+			features: data.features.map((f) => ({
+				...f,
+				properties: { ...f.properties, label: city_label(f.properties.name) }
+			}))
+		};
 		if (!map.getSource(SUMMARY_SOURCE))
 			map.addSource(SUMMARY_SOURCE, { type: 'geojson', data: cities });
 
@@ -139,14 +134,15 @@
 		*/
 		map.on('click', SUMMARY_HALO, (e: maplibregl.MapLayerMouseEvent) => {
 			const name = e.features?.[0]?.properties?.name;
-			if (name) goto(resolve('/[city]/measure', { city: toCityPath(name) }));
+			if (name) goto(resolve('/[city]/measure', { city: to_city_path(name) }));
 		});
 
-		map.on('mousemove', SUMMARY_HALO, (e: maplibregl.MapLayerMouseEvent) => {
-			const feature = e.features?.[0];
-			// Only on entering a new city: re-adding the popup on every mousemove
-			// would rebuild its DOM each time.
-			if (!feature || feature.id === hovered_id || !map.getSource(SUMMARY_SOURCE)) return;
+		track_hover(map, SUMMARY_HALO, SUMMARY_SOURCE, (feature) => {
+			if (!feature) {
+				popup.remove();
+				userInteracting = false;
+				return;
+			}
 			/*
 				Hold the globe still under the pointer: no new spin (userInteracting),
 				and stop the one in progress. Otherwise the current one-second spin
@@ -155,8 +151,6 @@
 			*/
 			userInteracting = true;
 			map.stop();
-			map.getCanvas().style.cursor = 'pointer';
-			set_hover(feature.id);
 			/*
 				Name the city once. Zoomed in, its label may already be on the map —
 				then the hover lights that label up (see the label paint) and no
@@ -170,15 +164,8 @@
 			else if (feature.geometry.type === 'Point')
 				popup
 					.setLngLat(feature.geometry.coordinates as [number, number])
-					.setText(cityLabel(feature.properties?.name))
+					.setText(city_label(feature.properties?.name))
 					.addTo(map);
-		});
-
-		map.on('mouseleave', SUMMARY_HALO, () => {
-			map.getCanvas().style.cursor = '';
-			if (map.getSource(SUMMARY_SOURCE)) set_hover(undefined);
-			popup.remove();
-			userInteracting = false;
 		});
 	});
 
@@ -203,7 +190,6 @@
 </script>
 
 <style>
-	/* The city name on hover: a small dark chip, readable over land and sea. */
 	/* The shared popup (app.css), tighter and tinted to the night sky. */
 	:global(.city-tip .maplibregl-popup-content) {
 		padding: 0.375rem 0.625rem;

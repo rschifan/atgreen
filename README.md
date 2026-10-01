@@ -42,7 +42,7 @@ browser ── SvelteKit (adapter-node, :4000) ── nginx ── PostgREST (:3
 
 The frontend is a thin client: every indicator is computed in PostgreSQL and returned as
 GeoJSON from PostgREST RPC endpoints under `/rpc/`. There is no application database and no
-server-side state — `src/js/api.js` is the whole data layer.
+server-side state — `src/js/api.ts` is the whole data layer.
 
 Distances are street-network walking times precomputed with
 [OSRM](https://github.com/Project-OSRM/osrm-backend); greenery comes from OpenStreetMap and
@@ -56,7 +56,7 @@ npm run dev
 ```
 
 The app talks to the **production** API at `https://atgreen.hpc4ai.unito.it/rpc` (the base URL
-is hard-coded in `src/js/api.js`), so a dev server needs network access but no local database.
+is hard-coded in `src/js/api.ts`), so a dev server needs network access but no local database.
 
 ```bash
 npm run test:unit     # vitest — pure logic in src/js
