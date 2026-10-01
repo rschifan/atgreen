@@ -28,13 +28,14 @@ async function stubBackend(page: Page) {
 			getindexes: 'getindexes',
 			getcitiesinfo: 'getcitiesinfo',
 			getaccessibility: 'getaccessibility',
-			getsummarybycity: 'getsummarybycity'
+			getsummarybycity: 'getsummarybycity',
+			queryosmgreen: 'queryosmgreen'
 		};
 
 		if (body[name]) {
 			await route.fulfill({ contentType: 'application/json', body: fixture(body[name]) });
 		} else {
-			// Everything else (queryosmgreen, the Create/Draw RPCs) returns an empty
+			// Everything else (the Create/Draw RPCs) returns an empty
 			// FeatureCollection: the test asserts on whether they were called at all.
 			await route.fulfill({
 				contentType: 'application/json',
@@ -96,7 +97,7 @@ async function selectTurin(page: Page) {
  * rather than in .quality-baseline.json because that file is read by a node script
  * with no browser; these need a running page.
  */
-const A11Y_BUDGET = { landing: 0, measure: 0 };
+const A11Y_BUDGET = { landing: 0, measure: 0, rails: 0 };
 
 /*
 	The section bar is a <nav> of links, not a Carbon tab strip: these navigate to
@@ -637,6 +638,29 @@ test.describe('ATGreen smoke', () => {
 			expect(violations.length, `measure: ${describe_violations(violations)}`).toBeLessThanOrEqual(
 				A11Y_BUDGET.measure
 			);
+		});
+
+		// The tool rails hold the form controls: sliders, checkboxes, the index-type
+		// toggle, selects. Their names were lost once (the slider's label sat on its
+		// root, not on the thumb that carries role="slider"), and only the landing
+		// page and Measure were scanned, so nothing noticed.
+		test('the tool rails stay within their violation budget', async ({ page }) => {
+			await stubBackend(page);
+			const ready = {
+				create: '[data-slot="slider-thumb"]',
+				explore: '[data-slot="slider-thumb"]',
+				compare: '[data-slot="select-trigger"]'
+			};
+			for (const [section, control] of Object.entries(ready)) {
+				await page.goto(`/Turin/${section}`);
+				await expect(page.locator(control).first()).toBeVisible({ timeout: 20000 });
+
+				const { violations } = await scan(page);
+				expect(
+					violations.length,
+					`${section}: ${describe_violations(violations)}`
+				).toBeLessThanOrEqual(A11Y_BUDGET.rails);
+			}
 		});
 	});
 
