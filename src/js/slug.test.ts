@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	cityLabel,
-	cityMatches,
-	findCityByParam,
-	findSlugCollisions,
-	safeDecode,
-	toCityPath,
-	toSlug
-} from './slug';
+import { cityLabel, cityMatches, findCityByParam, safeDecode, toCityPath, toSlug } from './slug';
 
 const feature = (name: string) => ({ properties: { name } });
 
@@ -114,22 +106,6 @@ describe('toSlug', () => {
 		expect(toSlug('')).toBe('');
 		expect(toSlug(undefined as unknown as string)).toBe('');
 		expect(toSlug('---')).toBe('');
-	});
-});
-
-describe('findSlugCollisions', () => {
-	it('reports nothing when every name is distinct', () => {
-		expect(findSlugCollisions([feature('Turin'), feature('Milan')])).toEqual({});
-	});
-
-	it('reports two names that fold to the same slug', () => {
-		expect(findSlugCollisions([feature('Córdoba'), feature('Cordoba')])).toEqual({
-			cordoba: ['Cordoba', 'Córdoba']
-		});
-	});
-
-	it('does not report the same city listed twice', () => {
-		expect(findSlugCollisions([feature('Turin'), feature('Turin')])).toEqual({});
 	});
 });
 

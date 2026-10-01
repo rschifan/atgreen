@@ -1,348 +1,82 @@
 <script lang="ts">
-	import type * as GeoJSON from 'geojson';
+	/**
+	 * Create's map: the index the user just built, coloured against their target,
+	 * with a popup that reads a cell out in words. Create mounts a new one for each
+	 * result, so `data` and the index parameters are fixed for its lifetime; only
+	 * the target moves.
+	 */
 	import centroid from '@turf/centroid';
-	import ScanIcon from '@lucide/svelte/icons/scan';
-	import EyeIcon from '@lucide/svelte/icons/eye';
-	import EyeOffIcon from '@lucide/svelte/icons/eye-off';
-	import { format } from 'd3';
-	import { onDestroy, onMount, setContext } from 'svelte';
-	import type { Unsubscriber } from 'svelte/store';
+	import type * as GeoJSON from 'geojson';
+	import type * as maplibregl from 'maplibre-gl';
 	import {
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../../js/layers.js';
-	import { get_default_map_props, key, maplibregl } from '../../js/map.js';
-	import { AccessibilityIndexType, ClassificationScheme, UnitType } from '../../js/types.js';
-	import { adjust_zoom, refit_zoom } from '../../js/utils.js';
-	import { current_city } from '../../stores/stores.js';
-	import ButtonMap from './ButtonMap.svelte';
+	import { hover_popup, track_hover } from '../../js/map.js';
+	import { AccessibilityIndexType, INDEX_CLASSIFICATION, describe_cell } from '../../js/types.js';
+	import { adjust_zoom } from '../../js/utils.js';
+	import BaseMap from './BaseMap.svelte';
+	import LayerControls from './LayerControls.svelte';
 
-	let map: maplibregl.Map;
-
+	export let container: string;
+	export let ref: maplibregl.Map | undefined = undefined;
 	export let mapLoaded = false;
 	export let styleLoaded = false;
-	let height: number;
-	export let container: string;
-	export let ref: object;
 	export let data: GeoJSON.FeatureCollection;
-	export let index_type: number;
-	export let threshold: number;
-	export let unit: string;
+	export let index_type: AccessibilityIndexType;
+	/** The minimum park size and the time budget the index was built with. */
 	export let size: number;
 	export let distance: number;
+	export let threshold: number;
 
-	let width = 0;
+	const SOURCE = 'NEW_INDEX_SOURCE';
+	const LAYER = 'NEW_INDEX_LAYER';
+	const popup = hover_popup();
+	const values = data.features.map((f) => f.properties?.v as number);
 
-	const NEW_INDEX_SOURCE = 'NEW_INDEX_SOURCE';
-	const NEW_INDEX_LAYER = 'NEW_INDEX_LAYER';
-	let visibilityToggle = true;
-	let hovered_accessibility_cell_id: string | number | undefined = 0;
-
-	const popup = new maplibregl.Popup({
-		closeButton: false,
-		closeOnClick: false
-	});
-
-	$: if (index_type) {
-		switch (index_type) {
-			case AccessibilityIndexType.MINIMUM_DISTANCE:
-				unit = UnitType.MINUTES;
-				break;
-			case AccessibilityIndexType.EXPOSURE:
-				unit = UnitType.HECTARS;
-				break;
-			case AccessibilityIndexType.PER_PERSON:
-				unit = UnitType.SQUARE_METERS;
-				break;
-
-			default:
-				break;
-		}
-	}
-	function get_predicate() {
-		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) return '<=';
-		else return '>=';
-	}
-
-	function update_colormap(accessibility_values: number[]) {
-		if (map && map.getLayer(NEW_INDEX_LAYER))
-			map.setPaintProperty(
-				NEW_INDEX_LAYER,
-				'fill-color',
-				get_accessibility_layer_fill_color(
-					accessibility_values,
-					index_type,
-					index_type == AccessibilityIndexType.PER_PERSON
-						? ClassificationScheme.LOGARITHMIC
-						: ClassificationScheme.LINEAR,
-					threshold
-				)
-			);
-	}
-
-	function update_opacity() {
-		if (map && map.getLayer(NEW_INDEX_LAYER))
-			map.setPaintProperty(NEW_INDEX_LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
-	}
-	function update_datasource() {
-		let source = map?.getSource<maplibregl.GeoJSONSource>(NEW_INDEX_SOURCE);
-		if (source) {
-			source.setData(data);
-		}
-	}
-
-	$: {
-		if (map && map.getLayer(NEW_INDEX_LAYER))
-			map.setLayoutProperty(NEW_INDEX_LAYER, 'visibility', visibilityToggle ? 'visible' : 'none');
-	}
-	$: {
-		if (threshold && data && data.features.length > 0) {
-			const accessibility_values: number[] = [...data.features.map((o: any) => o.properties.v)];
-
-			update_opacity();
-			update_colormap(accessibility_values);
-		}
-	}
-	onMount(() => {
-		init();
-	});
-
-	onDestroy(() => {
-		// Mapbox holds a WebGL context, tile workers and XHR queues; none of it is
-		// released by dropping the DOM node. Browsers cap simultaneous contexts and
-		// silently kill the oldest, which surfaces later as a blank map far from the
-		// cause. Now that tabs mount lazily, maps are created and destroyed often, so
-		// this matters more than when all six lived for the page's lifetime.
-		map?.remove();
-	});
-
-	function init() {
-		map = new maplibregl.Map(
-			get_default_map_props(container, $current_city.feature.geometry.coordinates)
-		);
-
-		if (data) map.setCenter(centroid(data).geometry.coordinates);
-
-		map.on('style.load', () => {
-			styleLoaded = true;
+	function show(map: maplibregl.Map) {
+		map.addSource(SOURCE, { type: 'geojson', data, generateId: true });
+		map.addLayer({
+			id: LAYER,
+			type: 'fill',
+			source: SOURCE,
+			paint: { 'fill-outline-color': 'rgba(0, 0, 0, 0)' }
 		});
+		paint(map, threshold);
+		adjust_zoom(data, map);
 
-		map.on('load', async () => {
-			mapLoaded = true;
-
-			if (!map.getSource(NEW_INDEX_SOURCE))
-				map.addSource(NEW_INDEX_SOURCE, {
-					type: 'geojson',
-					data: data,
-					generateId: true
-				});
-
-			if (!map.getLayer(NEW_INDEX_LAYER)) {
-				map.addLayer({
-					id: NEW_INDEX_LAYER,
-					type: 'fill',
-					source: NEW_INDEX_SOURCE,
-					paint: { 'fill-outline-color': 'rgba(0, 0, 0, 0)' }
-				});
-			}
-
-			const accessibility_layer = map.getLayer(NEW_INDEX_LAYER);
-
-			if (accessibility_layer) {
-				const accessibility_values: number[] = [...data.features.map((o: any) => o.properties.v)];
-
-				update_datasource();
-				update_colormap(accessibility_values);
-				update_opacity();
-				adjust_zoom(data, map);
-
-				map.setLayoutProperty(NEW_INDEX_LAYER, 'visibility', 'visible');
-			}
-
-			map.on('mouseenter', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
-				if (!e.features || e.features.length <= 0) return;
-
-				let current_feature = e.features[0];
-				let cell_id = current_feature.id;
-
-				map.getCanvas().style.cursor = 'pointer';
-
-				update_popup(current_feature);
-
-				if (hovered_accessibility_cell_id && hovered_accessibility_cell_id != 0) {
-					map.setFeatureState(
-						{ source: NEW_INDEX_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				}
-				map.setFeatureState({ source: NEW_INDEX_SOURCE, id: cell_id }, { hover: true });
-
-				hovered_accessibility_cell_id = cell_id;
-			});
-
-			map.on('mouseleave', NEW_INDEX_LAYER, () => {
-				map.getCanvas().style.cursor = '';
-
-				popup.remove();
-
-				if (map && map.getSource(NEW_INDEX_SOURCE))
-					map.setFeatureState(
-						{ source: NEW_INDEX_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				hovered_accessibility_cell_id = 0;
-			});
-
-			map.on('mousemove', NEW_INDEX_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
-				if (!e.features || e.features.length <= 0) return;
-
-				let current_feature = e.features[0];
-				let cell_id = current_feature.id;
-
-				update_popup(current_feature);
-
-				if (hovered_accessibility_cell_id != 0) {
-					map.setFeatureState(
-						{ source: NEW_INDEX_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				}
-				map.setFeatureState({ source: NEW_INDEX_SOURCE, id: cell_id }, { hover: true });
-				hovered_accessibility_cell_id = cell_id;
-			});
+		track_hover(map, LAYER, SOURCE, (feature) => {
+			if (!feature) return void popup.remove();
+			const index = { type: index_type, size, distance };
+			popup
+				.setLngLat(centroid(feature).geometry.coordinates as [number, number])
+				.setHTML(describe_cell(feature.properties.v, index, threshold))
+				.addTo(map);
 		});
-		// map.scrollZoom.disable();
-
-		ref = map;
 	}
 
-	setContext(key, {
-		getMap: () => map
-	});
-
-	$: if (width && height && map) {
-		map.resize();
-		refit_zoom(map);
-	}
-
-	function setVisibilityLayer() {
-		visibilityToggle = !visibilityToggle;
-	}
-
-	function center_and_zoom() {
-		if (data) adjust_zoom(data, map);
-	}
-
-	function update_popup(current_feature) {
-		if (current_feature) {
-			popup?.remove();
-
-			const anchor = centroid(current_feature);
-
-			if (anchor)
-				popup
-					.setLngLat(anchor.geometry.coordinates)
-					.setHTML(create_html_popup(current_feature))
-					.addTo(map);
-		}
-	}
-
-	function create_html_popup(feature: {}) {
-		let target_string;
-		let target_predicate;
-		const value = feature.properties.v;
-
-		let value_string: string;
-
-		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE) {
-			if (value == 0)
-				value_string = `A green area of at least <span style="font-weight:bold"> ${size} ha </span> is reachable within the cell.`;
-			else
-				value_string = `The distance to the closest park of at least <span style="font-weight:bold"> ${size} ha </span> is about <span style="font-weight:bold"> ${format(
-					'.1f'
-				)(value)} ${unit} </span> walking.`;
-		} else if (index_type == AccessibilityIndexType.EXPOSURE) {
-			value_string = `This cell has access to <span style="font-weight:bold">${format('.1f')(
-				value
-			)} ${unit} </span> of green within of <span style="font-weight:bold">${distance} </span> min walking.`;
-		} else {
-			value_string = `Each inhabitant of this cell has access to <span style="font-weight:bold">${format(
-				'.1f'
-			)(
-				value
-			)} ${unit} </span> of green within of <span style="font-weight:bold">${distance} </span> min walking.`;
-		}
-
-		if (index_type == AccessibilityIndexType.MINIMUM_DISTANCE)
-			target_predicate = value <= threshold;
-		else target_predicate = value >= threshold;
-		target_string = target_predicate
-			? `This cell <span style="font-weight:bold">does</span> meet your target (${format('.1f')(
-					value
-				)} ${unit} ${
-					index_type == AccessibilityIndexType.MINIMUM_DISTANCE ? '<' : '>'
-				} ${threshold} ${unit} )`
-			: `This cell <span style="font-weight:bold">does not </span> meet your target (${format(
-					'.1f'
-				)(value)} ${unit} ${
-					index_type == AccessibilityIndexType.MINIMUM_DISTANCE ? '>' : '<'
-				} ${threshold} ${unit} )`;
-
-		return (
-			'<div style="color:black;padding:0px;margin:0px;"><p style="font-size:1em">' +
-			value_string +
-			'</p>' +
-			'<p style="font-size:1em; margin-top:0.5rem">' +
-			target_string +
-			'</p>' +
-			'</div>'
+	function paint(map: maplibregl.Map | undefined, target: number) {
+		if (!map?.getLayer(LAYER)) return;
+		map.setPaintProperty(
+			LAYER,
+			'fill-color',
+			get_accessibility_layer_fill_color(
+				values,
+				index_type,
+				INDEX_CLASSIFICATION[index_type],
+				target
+			)
 		);
+		map.setPaintProperty(LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
 	}
+
+	// The Target slider recolours the map.
+	$: paint(ref, threshold);
 </script>
 
-<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
-	<div id={container} class="map-canvas" />
-
-	{#if map}
-		<slot />
-	{/if}
-</div>
-{#if map}
-	<ButtonMap
-		title={visibilityToggle ? 'Hide the accessibility layer' : 'Show the accessibility layer'}
-		action={setVisibilityLayer}
-		{map}
-		icon={visibilityToggle ? EyeOffIcon : EyeIcon}
-	/>
-	<ButtonMap title="Center and zoom" action={center_and_zoom} {map} icon={ScanIcon} />
+<BaseMap {container} bind:ref bind:mapLoaded bind:styleLoaded onload={show}>
+	<slot />
+</BaseMap>
+{#if ref}
+	<LayerControls map={ref} layers={[LAYER]} {data} noun="accessibility layer" />
 {/if}
-
-<style>
-	/*
-		The map fills its stage absolutely, so no ancestor has to cooperate by
-		passing a height down. `height` is measured rather than declared, which
-		finally gives the `$: if (width && height && map) map.resize()` guard a
-		real input instead of the constant 500 it used to compare.
-	*/
-	.map-root {
-		position: absolute;
-		inset: 0;
-	}
-
-	/*
-		This targets the map's own container, NOT "every div inside .map-root".
-
-		It used to be `.map-root > :global(div)`, and <slot /> renders its content
-		as a direct child of .map-root too — so the rule also sized the slotted
-		legend and Draw's map header. BaseLegend is `position: absolute; bottom:
-		1.5rem; max-width: 25rem` with a dark translucent background: given
-		`height: 100%` it became a 400px-wide, full-height dark rectangle down the
-		middle of the map, anchored at the bottom so its colour ramp overshot the
-		top edge. That is the black rectangle on the Before map, and the reason the
-		colour bar rendered at the top instead of above the bottom.
-	*/
-	.map-canvas {
-		width: 100%;
-		height: 100%;
-	}
-</style>

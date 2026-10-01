@@ -1,222 +1,47 @@
 <script lang="ts">
-	import { refit_zoom } from '../../js/utils';
-	import { createEventDispatcher, onDestroy, onMount, setContext } from 'svelte';
-	import { get_default_map_props, key, maplibregl } from '../../js/map.js';
-	import { current_city, hovered_feature } from '../../stores/stores.js';
+	/**
+	 * Draw's "Before" map. Draw adds the accessibility grid to it; this hooks the
+	 * grid up: hover feedback, a click on a cell asks Draw to greenify it, and the
+	 * camera is reported so the "After" map can follow.
+	 */
+	import type * as maplibregl from 'maplibre-gl';
+	import { createEventDispatcher } from 'svelte';
+	import { track_hover } from '../../js/map.js';
+	import BaseMap from './BaseMap.svelte';
 
-	const dispatch = createEventDispatcher();
-
-	function click_on_cell(feature: object) {
-		dispatch('new_green_cell', { cellid: feature.properties.id, feature: feature });
-	}
-
-	function update_center(center: maplibregl.LngLat) {
-		dispatch('update_center', { center: center });
-	}
-
-	function update_zoom(current: number) {
-		dispatch('update_zoom', { zoom: current });
-	}
-
-	let map: maplibregl.Map;
-
+	export let container: string;
+	export let ref: maplibregl.Map | undefined = undefined;
 	export let mapLoaded = false;
 	export let styleLoaded = false;
-	let height: number;
-	export let container: string;
-	export let ref: object;
 
-	let width = 0;
-
+	// Added by Draw; named here only to listen to them.
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
 
-	let hovered_accessibility_cell_id: string | number | undefined = 0;
+	const dispatch = createEventDispatcher();
 
-	const popup = new maplibregl.Popup({
-		closeButton: false,
-		closeOnClick: false,
-		anchor: 'bottom'
-	}).setLngLat([0, 0]);
+	function wire(map: maplibregl.Map) {
+		const report = () => dispatch('camera', { center: map.getCenter(), zoom: map.getZoom() });
+		map.on('move', report);
+		map.on('idle', report);
 
-	onMount(() => {
-		init();
-	});
+		track_hover(map, ACCESSIBILITY_LAYER, ACCESSIBILITY_SOURCE);
 
-	onDestroy(() => {
-		// See BaseMap: dropping the DOM node does not release the WebGL context.
-		map?.remove();
-	});
-
-	function init() {
-		map = new maplibregl.Map(
-			get_default_map_props(container, $current_city.feature.geometry.coordinates)
-		);
-
-		map.on('style.load', () => {
-			styleLoaded = true;
+		map.on('click', ACCESSIBILITY_LAYER, (e) => {
+			const hit = e.features?.[0];
+			if (!hit) return;
+			// Plain GeoJSON, not MapLibre's feature object: Draw draws it as a source,
+			// and the map's worker cannot serialise the class ("unregistered class").
+			const feature = {
+				type: 'Feature',
+				geometry: hit.geometry,
+				properties: { ...hit.properties }
+			};
+			dispatch('new_green_cell', { cellid: hit.properties.id, feature });
 		});
-
-		map.on('idle', () => {
-			update_center(map.getCenter());
-			update_zoom(map.getZoom());
-		});
-
-		map.on('load', async () => {
-			mapLoaded = true;
-
-			if (!map) return;
-
-			map.on('move', () => {
-				update_center(map.getCenter());
-			});
-
-			map.on('zoom', () => {
-				update_zoom(map.getZoom());
-			});
-
-			map.on('mouseenter', ACCESSIBILITY_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
-				if (!e.features || e.features.length <= 0) return;
-
-				map.getCanvas().style.cursor = 'pointer';
-				let current_feature = e.features[0];
-				let cell_id = current_feature.id;
-
-				// update_popup(current_feature);
-
-				if (hovered_accessibility_cell_id && hovered_accessibility_cell_id != 0) {
-					map.setFeatureState(
-						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				}
-
-				map.setFeatureState({ source: ACCESSIBILITY_SOURCE, id: cell_id }, { hover: true });
-				hovered_accessibility_cell_id = cell_id;
-
-				// update_popup(current_feature);
-				if (
-					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
-					!$hovered_feature
-				)
-					hovered_feature.set(current_feature);
-			});
-
-			/*
-				Was map.on('mouseleave', …) with no layer id. `mouseenter` and
-				`mouseleave` are LAYER events only — registered on the map itself this
-				listener never fired, under Mapbox or MapLibre, so leaving the map never
-				reset the cursor or removed the popup. Mapbox shipped no types, so
-				nothing said so; MapLibre's reject the call outright. The map-level
-				event is `mouseout`.
-			*/
-			map.on('mouseout', () => {
-				map.getCanvas().style.cursor = '';
-
-				popup.remove();
-
-				if (map && map.getSource(ACCESSIBILITY_SOURCE))
-					map.setFeatureState(
-						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				hovered_accessibility_cell_id = 0;
-				hovered_feature.set(null);
-			});
-
-			map.on('mousemove', ACCESSIBILITY_LAYER, (e: maplibregl.MapLayerMouseEvent) => {
-				if (!e.features || e.features.length <= 0) return;
-
-				map.getCanvas().style.cursor = 'pointer';
-
-				let current_feature = e.features[0];
-				let cell_id = current_feature.id;
-
-				// update_popup(current_feature);
-				if (
-					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
-					!$hovered_feature
-				)
-					hovered_feature.set(current_feature);
-
-				if (hovered_accessibility_cell_id != 0) {
-					map.setFeatureState(
-						{ source: ACCESSIBILITY_SOURCE, id: hovered_accessibility_cell_id },
-						{ hover: false }
-					);
-				}
-				// if (current_feature.properties.v != 0) {
-
-				map.setFeatureState({ source: ACCESSIBILITY_SOURCE, id: cell_id }, { hover: true });
-				hovered_accessibility_cell_id = cell_id;
-				// } else map.getCanvas().style.cursor = '';
-
-				// update_popup(current_feature);
-				if (
-					($hovered_feature && $hovered_feature.properties.id != current_feature.properties.id) ||
-					!$hovered_feature
-				)
-					hovered_feature.set(current_feature);
-			});
-
-			map.on('click', ACCESSIBILITY_LAYER, (e) => {
-				if (e.features && e.features.length > 0) {
-					// popup?.remove();
-
-					let current_feature = e.features[0];
-
-					click_on_cell(current_feature);
-				}
-			});
-		});
-
-		ref = map;
-	}
-
-	setContext(key, {
-		getMap: () => map
-	});
-
-	$: if (width && height && map) {
-		map.resize();
-		refit_zoom(map);
 	}
 </script>
 
-<div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
-	<div id={container} class="map-canvas" />
-
-	{#if map}
-		<slot />
-	{/if}
-</div>
-
-<style>
-	/*
-		The map fills its stage absolutely, so no ancestor has to cooperate by
-		passing a height down. `height` is measured rather than declared, which
-		finally gives the `$: if (width && height && map) map.resize()` guard a
-		real input instead of the constant 500 it used to compare.
-	*/
-	.map-root {
-		position: absolute;
-		inset: 0;
-	}
-
-	/*
-		This targets the map's own container, NOT "every div inside .map-root".
-
-		It used to be `.map-root > :global(div)`, and <slot /> renders its content
-		as a direct child of .map-root too — so the rule also sized the slotted
-		legend and Draw's map header. BaseLegend is `position: absolute; bottom:
-		1.5rem; max-width: 25rem` with a dark translucent background: given
-		`height: 100%` it became a 400px-wide, full-height dark rectangle down the
-		middle of the map, anchored at the bottom so its colour ramp overshot the
-		top edge. That is the black rectangle on the Before map, and the reason the
-		colour bar rendered at the top instead of above the bottom.
-	*/
-	.map-canvas {
-		width: 100%;
-		height: 100%;
-	}
-</style>
+<BaseMap {container} bind:ref bind:mapLoaded bind:styleLoaded onload={wire}>
+	<slot />
+</BaseMap>

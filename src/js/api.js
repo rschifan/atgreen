@@ -2,34 +2,39 @@ import { createAlova } from 'alova';
 import GlobalFetch from 'alova/GlobalFetch';
 import SvelteHook from 'alova/svelte';
 import { loading } from '../stores/stores';
+import { AccessibilityIndexType } from './types';
 
+/** PostgREST on this site: every indicator is computed in PostgreSQL behind it. */
+const RPC_BASE = 'https://atgreen.hpc4ai.unito.it/rpc';
+
+/*
+	Two clients, for two kinds of request.
+
+	alova (below) serves the published data — the city list, the index metadata,
+	a city's profile, an index's grid. It caches, so Measure and Compare share a
+	band's grid rather than each fetching it, and it drives the loading overlay.
+
+	`rpc()` serves the computations Create, Draw and Measure's explanations ask
+	for, which can genuinely take a minute (alova times out at 6 s) and are never
+	worth caching.
+*/
 const alovaInstance = createAlova({
-	baseURL: 'https://atgreen.hpc4ai.unito.it/rpc',
+	baseURL: RPC_BASE,
 	statesHook: SvelteHook,
 	requestAdapter: GlobalFetch(),
+	timeout: 6000,
 
 	cacheLogger(cache) {
 		if (cache) loading.set(false);
 	},
 
-	beforeRequest(method) {
+	beforeRequest() {
 		loading.set(true);
 	},
 
-	//...
-	// Use two items of the array to specify the interceptor for successful request and the interceptor for failed request
 	responded: {
-		// on: async () => {
-
-		//     console.log("fuck!")
-		//     loading.set(false);
-
-		// },
-
-		// request success interceptor
-		// When using the GlobalFetch request adapter, the first parameter receives the Response object
-		// The second parameter is the method instance of the current request, you can use it to synchronize the configuration information before and after the request
-		onSuccess: async (response, method) => {
+		// GlobalFetch hands over the Response; what this returns is the request's data.
+		onSuccess: async (response) => {
 			loading.set(false);
 
 			if (response.status >= 400) {
@@ -38,153 +43,158 @@ const alovaInstance = createAlova({
 			}
 
 			const json = await response.json();
-
-			if (!json) {
-				// This request will throw an error when an error is thrown or a Promise instance in the reject state is returned
-				// `new Error(message, value)` silently discards the value — the second
-				// argument is ErrorOptions, not a format argument.
-				throw new Error('received not well-formed json data');
-			}
-			// The parsed response data will be passed to the transformData hook function of the method instance, and these functions will be explained later
+			if (!json) throw new Error('received not well-formed json data');
 			return json;
 		},
 
-		// Interceptor for request failure
-		// This interceptor will be entered when the request is wrong.
-		// The second parameter is the method instance of the current request, you can use it to synchronize the configuration information before and after the request
-		onError: async (error, method) => {
+		onError: async (error) => {
 			console.error('RPC request failed:', error.message);
 			loading.set(false);
 		}
-	},
-	timeout: 6000
-});
-
-// const filterTodoList = text => {
-//     return alovaInstance.Get('/todo/list/search', {
-//         params: {
-//             keyword: text
-//         }
-//     });
-// };
-
-export const get_cities_metadata = alovaInstance.Get('/getcitiesinfo', {
-	headers: {
-		'Content-Type': 'application/json;charset=UTF-8'
 	}
 });
 
+const JSON_HEADERS = { 'Content-Type': 'application/json;charset=UTF-8' };
+
+export const get_cities_metadata = alovaInstance.Get('/getcitiesinfo', { headers: JSON_HEADERS });
+
+export const get_metadata = alovaInstance.Get('/getindexes', { headers: JSON_HEADERS });
+
+/** @param {string} city */
+export const get_city_profile = (city) =>
+	alovaInstance.Get('/getsummarybycity', { headers: JSON_HEADERS, params: { cityname: city } });
+
+/** @param {string} city @param {number} band */
 export const get_accessibility_layer = (city, band) =>
 	alovaInstance.Get('/getaccessibility', {
-		headers: {
-			'Content-Type': 'application/json;charset=UTF-8'
-		},
+		headers: JSON_HEADERS,
 		params: { city: city + '.tiff', band: band }
 	});
 
-export const get_city_profile = (city) =>
-	alovaInstance.Get('/getsummarybycity', {
-		headers: {
-			'Content-Type': 'application/json;charset=UTF-8'
-		},
-		params: { cityname: city }
-	});
-
-export const get_metadata = alovaInstance.Get('/getindexes', {
-	headers: {
-		'Content-Type': 'application/json;charset=UTF-8'
-	}
-});
-
+/** @param {string} cityname */
 export const get_greenareas_osm = (cityname) =>
-	alovaInstance.Get('/queryosmgreen', {
-		headers: {
-			'Content-Type': 'application/json;charset=UTF-8'
-		},
-		params: { cityname: cityname }
-	});
+	alovaInstance.Get('/queryosmgreen', { headers: JSON_HEADERS, params: { cityname: cityname } });
 
-/**
- * One place where every raw RPC call is made.
- *
- * The seven functions below each wrapped `fetch` in `new Promise(resolve, reject)`
- * whose try/catch could only ever catch a synchronous URLSearchParams error — the
- * reject branch was dead for network failures — and none had a timeout, so a
- * stalled request hung its caller indefinitely with the loading overlay up. They
- * also logged every URL and its parameters to the console.
- *
- * The contract is unchanged: this resolves to a Response, so callers keep doing
- * their own `response.ok` check and `.json()`. Collapsing these onto the alova
- * client — which resolves to parsed JSON — would change that contract at every
- * call site in Create and Draw, the two least test-covered views, so it is left
- * as separate work rather than done blind.
- */
-const RPC_BASE = 'https://atgreen.hpc4ai.unito.it/rpc';
 // A city-wide index can genuinely take a minute; the point of the timeout is that
 // a stalled connection eventually rejects instead of hanging forever.
 const RPC_TIMEOUT_MS = 120000;
 
 /**
- * @param {string} path RPC function name, e.g. 'getaccessibility'
+ * @param {string} path RPC function name, e.g. 'indmindistance_osm'
  * @param {Record<string, string | number>} params query parameters
  * @returns {Promise<Response>}
  */
 function rpc(path, params) {
-	const url = `${RPC_BASE}/${path}?${new URLSearchParams(params)}`;
+	const query = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
+	const url = `${RPC_BASE}/${path}?${query}`;
 	return fetch(url, { signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
 }
 
-/** @param {string} city @param {number} band @returns {Promise<Response>} */
-export function get_city_accessibility_band(city, band) {
-	const filename = city.endsWith('.tiff') ? city : `${city}.tiff`;
-	return rpc('getaccessibility', { city: filename, band });
+/**
+ * The cells of a computed index, or null when the city has none.
+ * @param {Response} response
+ */
+async function cells(response) {
+	if (!response.ok) throw new Error(`RPC failed: HTTP ${response.status}`);
+	const json = await response.json();
+	return json?.features?.length > 0 ? json : null;
 }
 
-/** @param {string} cityname @param {number} pga_size @param {number} green_code @returns {Promise<Response>} */
-export function get_indmindistance_osm(cityname, pga_size, green_code) {
-	// indmindistance_osm(cityname text, pga_size numeric, green_code text)
-	return rpc('indmindistance_osm', { cityname, pga_size, green_code });
+/**
+ * An index built from the user's own parameters, for Create and Draw.
+ *
+ * @param {number} type AccessibilityIndexType
+ * @param {string} cityname
+ * @param {number} pga_size minimum green-area size, ha
+ * @param {number} distance time budget, min (exposure and per person)
+ * @param {number} green_code the green-type subset, from get_green_types_code
+ */
+export async function get_custom_index(type, cityname, pga_size, distance, green_code) {
+	switch (type) {
+		case AccessibilityIndexType.EXPOSURE:
+			return cells(await rpc('indexposure_esa', { cityname, pga_size, distance }));
+		case AccessibilityIndexType.PER_PERSON:
+			return cells(await rpc('indperperson_osm', { cityname, pga_size, distance, green_code }));
+		default:
+			return cells(await rpc('indmindistance_osm', { cityname, pga_size, green_code }));
+	}
 }
 
-/** @param {string} cityname @param {number} pga_size @param {number} distance @returns {Promise<Response>} */
-export function get_indexposure_esa(cityname, pga_size, distance) {
-	// indexposure_esa(cityname text, pga_size numeric, distance numeric)
-	return rpc('indexposure_esa', { cityname, pga_size, distance });
+/**
+ * The same index recomputed as if one cell were green, for Draw's "After" map.
+ *
+ * @param {number} type AccessibilityIndexType
+ * @param {string} cityname
+ * @param {number} pga_size
+ * @param {number} distance
+ * @param {number} green_code
+ * @param {number} new_size area of the new green, ha
+ * @param {number} cell_id the cell made green
+ */
+export async function get_greened_index(
+	type,
+	cityname,
+	pga_size,
+	distance,
+	green_code,
+	new_size,
+	cell_id
+) {
+	switch (type) {
+		case AccessibilityIndexType.EXPOSURE:
+			return cells(
+				await rpc('newgreen_exposure_esa', {
+					cityname,
+					pga_size,
+					distance,
+					newarea_size: new_size,
+					newarea_id: cell_id
+				})
+			);
+		case AccessibilityIndexType.PER_PERSON:
+			return cells(
+				await rpc('newgreen_perperson_osm', {
+					cityname,
+					pga_size,
+					distance,
+					green_code,
+					newgreen_size: new_size,
+					newgreen_id: cell_id
+				})
+			);
+		default:
+			return cells(
+				await rpc('newgreen_mindistance_osm', {
+					cityname,
+					pga_size,
+					green_code,
+					new_green_id: cell_id
+				})
+			);
+	}
 }
 
-/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} green_code @returns {Promise<Response>} */
-export function get_indperperson_osm(cityname, pga_size, distance, green_code) {
-	// indperperson_osm(cityname text, pga_size numeric, distance numeric, green_code text)
-	return rpc('indperperson_osm', { cityname, pga_size, distance, green_code });
-}
-
-/** @param {string} cityname @param {number} pga_size @param {number} green_code @param {number} cell_id @returns {Promise<Response>} */
-export function newgreen_mindistance_osm(cityname, pga_size, green_code, cell_id) {
-	// newgreen_mindistance_osm(cityname text, pga_size numeric, green_code text, new_green_id numeric)
-	return rpc('newgreen_mindistance_osm', { cityname, pga_size, green_code, new_green_id: cell_id });
-}
-
-/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} size @param {number} cell_id @returns {Promise<Response>} */
-export function newgreen_exposure_esa(cityname, pga_size, distance, size, cell_id) {
-	// newgreen_exposure_esa(cityname text, pga_size numeric, distance numeric, newarea_size numeric, newarea_id numeric)
-	return rpc('newgreen_exposure_esa', {
-		cityname,
-		pga_size,
-		distance,
-		newarea_size: size,
-		newarea_id: cell_id
-	});
-}
-
-/** @param {string} cityname @param {number} pga_size @param {number} distance @param {number} green_code @param {number} size @param {number} cell_id @returns {Promise<Response>} */
-export function newgreen_perperson_osm(cityname, pga_size, distance, green_code, size, cell_id) {
-	// newgreen_perperson_osm(cityname text, pga_size numeric, distance numeric, green_code text, newgreen_size numeric, newgreen_id numeric)
-	return rpc('newgreen_perperson_osm', {
-		cityname,
-		pga_size,
-		distance,
-		green_code,
-		newgreen_size: size,
-		newgreen_id: cell_id
-	});
+/**
+ * The green areas behind one cell's value, for Measure's explanation layer:
+ * the nearest park (distance), or every area within reach (the other two).
+ *
+ * @param {number} type AccessibilityIndexType
+ * @param {string} cityname
+ * @param {number} source the cell's id
+ * @param {number} pga_size
+ * @param {number} distance
+ */
+export async function get_explanation(type, cityname, source, pga_size, distance) {
+	switch (type) {
+		case AccessibilityIndexType.EXPOSURE:
+			return cells(
+				await rpc('allareaswithindistance_esa', { cityname, source, pga_size, distance })
+			);
+		case AccessibilityIndexType.PER_PERSON:
+			return cells(
+				await rpc('exposurewithindistance_osm', { cityname, source, pga_size, distance })
+			);
+		default:
+			return cells(await rpc('closestpark_osm', { cityname, source, pga_size }));
+	}
 }

@@ -1,8 +1,7 @@
 import { writable } from 'svelte/store';
 
-export const current_city = writable(
-	/** @type {{ text: string, feature: any } | undefined} */ (undefined)
-);
+/** @type {import('svelte/store').Writable<{ text: string, feature: any } | undefined>} */
+export const current_city = writable(undefined);
 /**
  * Set once here rather than in Measure's onMount. That hook reset it to WHO on
  * every mount, which was invisible while panels mounted once and became "your
@@ -34,7 +33,6 @@ export const metadata = writable(
 export const search_active = writable(false);
 export const current_accessibility_index_data = writable();
 export const current_cell = writable();
-export const hovered_feature = writable();
 
 /**
  * Whether anything is in flight.
@@ -54,9 +52,11 @@ function createLoadingStore() {
 	const count = writable(0);
 
 	return {
+		/** @param {(loading: boolean) => void} run */
 		subscribe(run) {
 			return count.subscribe((n) => run(n > 0));
 		},
+		/** @param {boolean} value */
 		set(value) {
 			count.update((n) => (value ? n + 1 : Math.max(0, n - 1)));
 		},

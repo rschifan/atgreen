@@ -101,3 +101,31 @@
 		color: var(--primary);
 	}
 }
+
+/*
+	Map popups, one look on every map: the app's dark surface and its type.
+	MapLibre's default is a white box in Helvetica; each map had restyled its
+	own, two of them with inline styles in the HTML. Scoped under the map so it
+	outranks maplibre-gl.css, which loads after this sheet.
+*/
+.maplibregl-map .maplibregl-popup-content {
+	padding: 0.5rem 0.75rem;
+	border-radius: var(--radius);
+	background: var(--popover);
+	color: var(--popover-foreground);
+	font:
+		400 0.8125rem/1.4 'IBM Plex Sans Variable',
+		system-ui,
+		sans-serif;
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.45);
+	pointer-events: none;
+}
+.maplibregl-map .maplibregl-popup-content p {
+	margin: 0;
+}
+.maplibregl-map .maplibregl-popup-content p + p {
+	margin-top: 0.25rem;
+}
+.maplibregl-map .maplibregl-popup-tip {
+	display: none;
+}

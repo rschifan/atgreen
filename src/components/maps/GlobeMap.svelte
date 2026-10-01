@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount, onDestroy, setContext } from 'svelte';
-	import { BASEMAP_STYLE, key, maplibregl } from '../../js/map.js';
+	import { onMount, onDestroy } from 'svelte';
+	import { BASEMAP_STYLE, maplibregl } from '../../js/map.js';
 	import { current_city } from '../../stores/stores.js';
 	import { globe_style } from '../../stores/settings';
 
@@ -350,10 +350,6 @@
 	}
 	// ##############################################################################
 
-	setContext(key, {
-		getMap: () => map
-	});
-
 	$: if (width && map) map.resize();
 </script>
 
@@ -457,18 +453,7 @@
 		}
 	}
 
-	/*
-		This targets the map's own container, NOT "every div inside .map-root".
-
-		It used to be `.map-root > :global(div)`, and <slot /> renders its content
-		as a direct child of .map-root too — so the rule also sized the slotted
-		legend and Draw's map header. BaseLegend is `position: absolute; bottom:
-		1.5rem; max-width: 25rem` with a dark translucent background: given
-		`height: 100%` it became a 400px-wide, full-height dark rectangle down the
-		middle of the map, anchored at the bottom so its colour ramp overshot the
-		top edge. That is the black rectangle on the Before map, and the reason the
-		colour bar rendered at the top instead of above the bottom.
-	*/
+	/* The map's own container only, never "every div in .map-root" (see BaseMap). */
 	.map-canvas {
 		width: 100%;
 		height: 100%;

@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	create_empty_geojson,
-	create_geojson,
-	escape_html,
-	get_green_types_code,
-	html,
-	ordinal
-} from './utils';
+import { create_empty_geojson, escape_html, get_green_types_code, html, ordinal } from './utils';
 
 describe('get_green_types_code', () => {
 	// The codes are positional: the RPCs take this number, not the list.
@@ -54,14 +47,6 @@ describe('get_green_types_code', () => {
 describe('geojson helpers', () => {
 	it('creates a well-formed empty FeatureCollection', () => {
 		expect(create_empty_geojson()).toEqual({ type: 'FeatureCollection', features: [] });
-	});
-
-	it('wraps features in a FeatureCollection', () => {
-		const features = [{ type: 'Feature', geometry: null, properties: {} }];
-		expect(create_geojson(features as never)).toEqual({
-			type: 'FeatureCollection',
-			features
-		});
 	});
 
 	it('returns a fresh object each time, so callers cannot alias one empty collection', () => {

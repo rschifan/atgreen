@@ -29,7 +29,7 @@ server, which has no CSP — the failure is invisible until deploy.
 
 ## The landing globe
 
-The home page's globe is dressed differently from the city maps (`GlobleMap.svelte`):
+The home page's globe is dressed differently from the city maps (`GlobeMap.svelte`):
 the basemap's roads, land use and labels are hidden, the oceans are deep blue, and the
 land is Natural Earth's shaded relief. OpenFreeMap serves that raster
 (`/natural_earth/ne2sr/{z}/{x}/{y}.png`) from the same host, so the CSP above covers it.
