@@ -42,7 +42,8 @@
 </script>
 
 {#snippet heading()}
-	<span>{title}</span>
+	<!-- The id names a slider: the title alone, not the value that changes as it moves. -->
+	<span id={titleId}>{title}</span>
 	{#if value}
 		<span class="text-sm font-normal tracking-normal text-foreground normal-case tabular-nums"
 			>{value}</span
@@ -62,13 +63,13 @@
 
 {#if group}
 	<Field.Set class="gap-2.5">
-		<Field.Legend variant="label" id={titleId} class={titleClass}>{@render heading()}</Field.Legend>
+		<Field.Legend variant="label" class={titleClass}>{@render heading()}</Field.Legend>
 		{@render children()}
 		{@render foot()}
 	</Field.Set>
 {:else}
 	<Field.Field class="gap-2.5">
-		<Field.Label for={forId} id={titleId} class={titleClass}>{@render heading()}</Field.Label>
+		<Field.Label for={forId} class={titleClass}>{@render heading()}</Field.Label>
 		{@render children()}
 		{@render foot()}
 	</Field.Field>

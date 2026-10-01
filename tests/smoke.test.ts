@@ -548,6 +548,9 @@ test.describe('ATGreen smoke', () => {
 				'background-color',
 				green
 			);
+
+			// Named by its title alone: a name carrying the value changes as it moves.
+			await expect(page.getByRole('slider', { name: 'Minimum size', exact: true })).toHaveCount(1);
 		});
 
 		test('the index rows are grouped, reachable and operable by keyboard', async ({ page }) => {
@@ -649,10 +652,12 @@ test.describe('ATGreen smoke', () => {
 			const ready = {
 				create: '[data-slot="slider-thumb"]',
 				explore: '[data-slot="slider-thumb"]',
-				compare: '[data-slot="select-trigger"]'
+				compare: '[data-slot="select-trigger"]',
+				// Not a rail, but the other page of mostly hand-written markup.
+				about: '.about-body'
 			};
 			for (const [section, control] of Object.entries(ready)) {
-				await page.goto(`/Turin/${section}`);
+				await page.goto(section === 'about' ? '/about' : `/Turin/${section}`);
 				await expect(page.locator(control).first()).toBeVisible({ timeout: 20000 });
 
 				const { violations } = await scan(page);
