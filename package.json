@@ -29,10 +29,11 @@
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@tailwindcss/vite": "^4.3.3",
-		"@turf/bbox": "^6.5.0",
-		"@turf/centroid": "^6.5.0",
+		"@turf/bbox": "^7.4.0",
+		"@turf/centroid": "^7.4.0",
 		"@types/d3": "^7.4.0",
 		"@types/geojson": "^7946.0.16",
+		"@types/node": "^22.20.4",
 		"alova": "^2.8.1",
 		"autoprefixer": "^10.6.1",
 		"bits-ui": "^2.19.3",
@@ -60,7 +61,7 @@
 	},
 	"type": "module",
 	"dependencies": {
-		"@turf/union": "^6.5.0",
+		"@turf/union": "^7.4.0",
 		"maplibre-gl": "^6.11.2",
 		"simple-statistics": "^7.8.3"
 	},

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type * as GeoJSON from 'geojson';
 	import type * as maplibregl from 'maplibre-gl';
 	import CircleHelpIcon from '@lucide/svelte/icons/circle-help';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -7,29 +6,26 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { onMount } from 'svelte';
-	import type { Readable } from 'svelte/store';
 	import { resolve } from '$app/paths';
 	import { globe_style } from '../stores/settings';
+	import { cities } from '../stores/stores';
 	import Tutorial from './Tutorial.svelte';
 	import SummaryLayer from './layers/SummaryLayer.svelte';
 	import GlobeMap from './maps/GlobeMap.svelte';
 
-	export let active: boolean;
-	// The city list store (/rpc/getcitiesinfo): a FeatureCollection of points.
-	export let data: Readable<{ features: GeoJSON.Feature[] } | undefined>;
+	/** Whether the city search is open. */
+	let { active = $bindable(false) }: { active?: boolean } = $props();
 
-	let map: maplibregl.Map;
-	let mapLoaded = false;
-	let styleLoaded = false;
-	let open = false;
-	let userInteracting: boolean;
-	let hero: HTMLDivElement;
-	let hero_height = 0;
+	let map = $state.raw<maplibregl.Map>();
+	let mapLoaded = $state(false);
+	let styleLoaded = $state(false);
+	let open = $state(false);
+	let userInteracting = $state(false);
+	let hero = $state<HTMLDivElement>();
+	let hero_height = $state(0);
 
 	// Where the text ends, so the globe can be framed below it.
-	$: clear_top = hero && hero_height ? hero.offsetTop + hero_height : 0;
-
-	$: summary_data = $data?.features?.length ? ($data as GeoJSON.FeatureCollection) : undefined;
+	const clear_top = $derived(hero && hero_height ? hero.offsetTop + hero_height : 0);
 
 	// The header floats, translucent, over the globe — on this page only.
 	onMount(() => {
@@ -111,8 +107,8 @@
 	</Dialog.Root>
 </div>
 
-{#if map && mapLoaded && styleLoaded && summary_data}
-	<SummaryLayer {map} data={summary_data} bind:userInteracting />
+{#if map && mapLoaded && styleLoaded && $cities?.features.length}
+	<SummaryLayer {map} data={$cities} bind:userInteracting />
 {/if}
 
 <style>

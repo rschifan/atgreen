@@ -1,5 +1,43 @@
 import { html } from './utils';
 
+import type * as GeoJSON from 'geojson';
+
+/*
+	What the RPCs return, named once. Every request is typed with these in api.ts,
+	so a component reads the fields it expects rather than `any`.
+*/
+
+/** A city as /rpc/getcitiesinfo lists it: its name and its grid's row count. */
+export type CityProperties = { name: string; nrows: number };
+export type CityCollection = GeoJSON.FeatureCollection<GeoJSON.Point, CityProperties>;
+
+/** A cell of a published index (/rpc/getaccessibility): grid position and value. */
+export type GridCell = { x: number; y: number; v: number };
+export type Grid = GeoJSON.FeatureCollection<GeoJSON.Polygon, GridCell>;
+
+/** A cell of an index computed on demand for Create and Draw. */
+export type ComputedCell = { id: number; v: number };
+export type ComputedGrid = GeoJSON.FeatureCollection<GeoJSON.Polygon, ComputedCell>;
+
+/** An OpenStreetMap green area (/rpc/queryosmgreen). */
+export type GreenArea = {
+	osm_name: string;
+	osm_value: number;
+	size: number;
+	osm_element: number;
+	osm_id: number;
+};
+export type GreenAreas = GeoJSON.FeatureCollection<
+	GeoJSON.Polygon | GeoJSON.MultiPolygon,
+	GreenArea
+>;
+
+/** /rpc/getsummarybycity as sent: `d` is the text of a Postgres array. */
+export type ProfilePayload = Record<
+	string,
+	{ v: number | string; p: number | string; d: string | number[] }
+>;
+
 export enum AccessibilityIndexType {
 	MINIMUM_DISTANCE,
 	EXPOSURE,
@@ -360,9 +398,7 @@ export type IndexResult = {
 };
 
 /** The RPC sends `d` as the text of a Postgres array, "[11.0, 7.6, …]". */
-export function parse_profile(
-	raw: Record<string, { v: number | string; p: number | string; d: string | number[] }> | null
-): Record<string, IndexResult> {
+export function parse_profile(raw: ProfilePayload | null | undefined): Record<string, IndexResult> {
 	const out: Record<string, IndexResult> = {};
 	for (const [name, r] of Object.entries(raw ?? {})) {
 		const d = Array.isArray(r.d)

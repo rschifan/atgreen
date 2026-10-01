@@ -1,56 +1,52 @@
 <script lang="ts">
-	import { page } from '$app/stores';
 	import { resolve } from '$app/paths';
-	import { useRequest } from 'alova';
+	import { page } from '$app/state';
+	import { onMount, type Snippet } from 'svelte';
 	import { get_metadata } from '../../js/api';
-	import { cityLabel, findCityByParam, safeDecode, toCityPath } from '../../js/slug';
+	import { SECTIONS, SECTION_ROUTES, section_of, section_title } from '../../js/sections';
+	import { city_label, find_city_by_param, safe_decode, to_city_path } from '../../js/slug';
 	import { TargetStoreImpl } from '../../js/types';
-	import { cities, current_city, metadata } from '../../stores/stores.js';
+	import { cities, current_city, metadata } from '../../stores/stores';
 
-	const SECTIONS = ['measure', 'compare', 'create', 'draw', 'explore'] as const;
-
-	// Each section is its own route, so `resolve` is given the route id rather
-	// than a built string: it applies any configured base path and, being typed
-	// by route id, fails the build if a section route is renamed out from under
-	// these links.
-	const ROUTES = {
-		measure: '/[city]/measure',
-		compare: '/[city]/compare',
-		create: '/[city]/create',
-		draw: '/[city]/draw',
-		explore: '/[city]/explore'
-	} as const;
-	const title = (s: string) => s[0].toUpperCase() + s.slice(1);
+	let { children }: { children: Snippet } = $props();
 
 	// The index targets and descriptions, shared by every pane below.
-	// `useRequest` returns an object OF stores, not a store — destructure `data`
-	// out and subscribe to that, or `$metadata_request` tries to treat the plain
-	// wrapper object as a store and the whole route 500s on the server.
-	const { data: index_metadata } = useRequest(get_metadata, { initialData: [] });
-	$: if ($index_metadata?.length > 0) {
-		metadata.set(TargetStoreImpl.createInstance($index_metadata));
-	}
+	onMount(() => {
+		get_metadata.send().then(
+			(records) => {
+				if (records?.length) metadata.set(TargetStoreImpl.createInstance(records));
+			},
+			(error) => console.error('The index list did not load', error)
+		);
+	});
 
-	$: param = $page.params.city ?? '';
-	$: features = $cities?.features ?? [];
+	const param = $derived(page.params.city ?? '');
+	const features = $derived($cities?.features ?? []);
 
 	// The URL is the source of truth for which city is open. Resolving here and
 	// writing the store means a pasted link, a search selection and a back button
 	// all arrive the same way, and no pane needs to know a route exists.
-	$: feature = findCityByParam(features, param);
-	$: current_city.set(
-		feature?.properties?.name ? { text: feature.properties.name, feature } : undefined
-	);
+	const feature = $derived(find_city_by_param(features, param));
+	$effect.pre(() => {
+		current_city.set(feature ? { text: feature.properties.name, feature } : undefined);
+	});
 
 	// `features.length === 0` is "the city list has not arrived yet", which looks
 	// identical to "no such city" if you only check `feature`. Distinguish them,
 	// or a slow network renders Not found and then silently corrects itself.
-	$: resolving = features.length === 0;
-	$: notFound = !resolving && !feature;
+	const resolving = $derived(features.length === 0);
+	const notFound = $derived(!resolving && !feature);
 
-	$: cityPath = feature?.properties?.name ? toCityPath(feature.properties.name) : param;
-	$: section = SECTIONS.find((s) => $page.url.pathname.endsWith('/' + s)) ?? 'measure';
+	const cityPath = $derived(feature ? to_city_path(feature.properties.name) : param);
+	const section = $derived(section_of(page.url.pathname));
+	const page_title = $derived(
+		feature ? `${city_label(feature.properties.name)} — ${section_title(section)}` : 'ATGreen'
+	);
 </script>
+
+<svelte:head>
+	<title>{page_title}</title>
+</svelte:head>
 
 <!--
 	A navigation bar, not a tab strip.
@@ -67,26 +63,26 @@
 		<a href={resolve('/')}>Search</a>
 		{#each SECTIONS as s (s)}
 			<a
-				href={resolve(ROUTES[s], { city: cityPath })}
-				aria-current={s === section ? 'page' : undefined}>{title(s)}</a
+				href={resolve(SECTION_ROUTES[s], { city: cityPath })}
+				aria-current={s === section ? 'page' : undefined}>{section_title(s)}</a
 			>
 		{/each}
 	</nav>
 
 	{#if notFound}
 		<div class="notice">
-			<h1>No city called “{safeDecode(param)}”</h1>
+			<h1>No city called “{safe_decode(param)}”</h1>
 			<p>
 				It may have been renamed, or the link may be mistyped.
 				<a href={resolve('/')}>Pick a city from the globe</a>.
 			</p>
 		</div>
-	{:else if resolving}
+	{:else if resolving || !$current_city}
 		<div class="notice"><p>Loading cities…</p></div>
 	{:else}
 		<!-- One h1 per page, as the title reads; the rail and the map show the rest. -->
-		<h1 class="sr-only">{cityLabel(feature.properties.name)} — {title(section)}</h1>
-		<slot />
+		<h1 class="sr-only">{page_title}</h1>
+		{@render children()}
 	{/if}
 </div>
 

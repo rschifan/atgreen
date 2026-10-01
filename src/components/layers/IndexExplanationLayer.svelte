@@ -5,8 +5,7 @@
 	 * reach — drawn and named on the map.
 	 */
 	import XIcon from '@lucide/svelte/icons/x';
-	import { onDestroy, onMount } from 'svelte';
-	import type { Unsubscriber } from 'svelte/store';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { get_explanation } from '../../js/api';
 	import { BOUNDARY_MAP_COLOR, TEXT_MAP_COLOR } from '../../js/colors';
 	import { LABEL_FONT, maplibregl } from '../../js/map';
@@ -20,14 +19,13 @@
 	} from '../../stores/stores';
 	import ButtonMap from '../maps/ButtonMap.svelte';
 
-	export let metadata: TargetStoreImpl;
-	export let map: maplibregl.Map;
+	let { map, metadata }: { map: maplibregl.Map; metadata: TargetStoreImpl | undefined } = $props();
 
 	const SOURCE = 'PGAS_SOURCE';
 	const LAYER = 'PGAS_LAYER';
 	const LABELS_LAYER = 'PGAS_LABELS_LAYER';
 
-	let unsubscribe_current_cell: Unsubscriber | undefined;
+	const selected = $derived($current_cell && $current_cell.x !== -1 && $current_cell.y !== -1);
 
 	onMount(() => {
 		map.addSource(SOURCE, { type: 'geojson', data: create_empty_geojson(), generateId: true });
@@ -54,16 +52,16 @@
 				'text-color': TEXT_MAP_COLOR
 			}
 		});
+	});
 
-		unsubscribe_current_cell = current_cell.subscribe((cell) => {
-			// {x: -1, y: -1} means "nothing selected"; it is a truthy object, so it
-			// once fired a request for the cell id derived from (-1, -1).
-			if (cell && cell.x !== -1 && cell.y !== -1) explain(cell);
-		});
+	// A selected cell asks for its explanation; {x: -1, y: -1} means none is
+	// selected, and is a truthy object, so it is checked for, not assumed.
+	$effect(() => {
+		const cell = $current_cell;
+		if (cell && cell.x !== -1 && cell.y !== -1) untrack(() => explain(cell));
 	});
 
 	onDestroy(() => {
-		unsubscribe_current_cell?.();
 		// The map may already be gone, after which these throw.
 		try {
 			for (const layer of [LABELS_LAYER, LAYER]) if (map.getLayer(layer)) map.removeLayer(layer);
@@ -108,6 +106,6 @@
 	}
 </script>
 
-{#if $current_cell && $current_cell.x != -1 && $current_cell.y != -1}
+{#if selected}
 	<ButtonMap title="Deselect cell" action={back} {map} icon={XIcon} />
 {/if}

@@ -5,28 +5,40 @@
 	 * view that needs more — sources, layers, handlers — wraps it and hooks
 	 * `onstyle` or `onload`, rather than building a map of its own.
 	 */
-	import { onDestroy, onMount } from 'svelte';
-	import { get_default_map_props, maplibregl } from '../../js/map.js';
+	import { onDestroy, onMount, type Snippet } from 'svelte';
+	import { get_default_map_props, maplibregl } from '../../js/map';
 	import { refit_zoom } from '../../js/utils';
-	import { current_city } from '../../stores/stores.js';
+	import { current_city } from '../../stores/stores';
 
-	export let container: string;
-	export let ref: maplibregl.Map | undefined;
-	export let mapLoaded = false;
-	export let styleLoaded = false;
-	/** Runs once the style is in: the moment to add sources and layers. */
-	export let onstyle: ((map: maplibregl.Map) => void) | undefined = undefined;
-	/** Runs once the map has loaded: the moment to wire handlers to its layers. */
-	export let onload: ((map: maplibregl.Map) => void) | undefined = undefined;
+	let {
+		container,
+		ref = $bindable(),
+		mapLoaded = $bindable(false),
+		styleLoaded = $bindable(false),
+		onstyle,
+		onload,
+		children
+	}: {
+		/** The id of the map's own element. */
+		container: string;
+		ref?: maplibregl.Map;
+		mapLoaded?: boolean;
+		styleLoaded?: boolean;
+		/** Runs once the style is in: the moment to add sources and layers. */
+		onstyle?: (map: maplibregl.Map) => void;
+		/** Runs once the map has loaded: the moment to wire handlers to its layers. */
+		onload?: (map: maplibregl.Map) => void;
+		/** Drawn over the map: legends, captions. */
+		children?: Snippet;
+	} = $props();
 
-	let map: maplibregl.Map | undefined;
-	let width = 0;
-	let height = 0;
+	let map = $state.raw<maplibregl.Map>();
+	let width = $state(0);
+	let height = $state(0);
 
 	onMount(() => {
-		const created = new maplibregl.Map(
-			get_default_map_props(container, $current_city.feature.geometry.coordinates)
-		);
+		const center = $current_city?.feature.geometry.coordinates as [number, number] | undefined;
+		const created = new maplibregl.Map(get_default_map_props(container, center ?? [0, 0]));
 		created.on('style.load', () => {
 			styleLoaded = true;
 			onstyle?.(created);
@@ -47,17 +59,19 @@
 	});
 
 	// `height` is measured, not declared, so this has a real input to react to.
-	$: if (width && height && map) {
-		map.resize();
-		refit_zoom(map);
-	}
+	$effect(() => {
+		if (width && height && map) {
+			map.resize();
+			refit_zoom(map);
+		}
+	});
 </script>
 
 <div class="map-root" bind:clientWidth={width} bind:clientHeight={height}>
 	<div id={container} class="map-canvas"></div>
 
 	{#if map}
-		<slot />
+		{@render children?.()}
 	{/if}
 </div>
 

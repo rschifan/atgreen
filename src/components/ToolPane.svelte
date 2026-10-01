@@ -14,16 +14,25 @@
 	 * space away.
 	 */
 
-	/**
-	 * Let the stage scroll its own content instead of holding one full-bleed child.
-	 * Compare needs this: its two columns are floats, taller than the viewport.
-	 */
-	export let scroll = false;
+	import type { Snippet } from 'svelte';
+
+	let {
+		rail,
+		children,
+		scroll = false
+	}: {
+		/** The controls. */
+		rail: Snippet;
+		/** The stage: a map that fills it, or Compare's scrolling columns. */
+		children: Snippet;
+		/** Let the stage scroll its own content instead of holding one full-bleed child. */
+		scroll?: boolean;
+	} = $props();
 </script>
 
 <div class="pane">
-	<aside class="rail"><slot name="rail" /></aside>
-	<div class="stage" class:scroll><slot /></div>
+	<aside class="rail">{@render rail()}</aside>
+	<div class="stage" class:scroll>{@render children()}</div>
 </div>
 
 <style>
@@ -57,13 +66,6 @@
 
 	.stage.scroll {
 		overflow-y: auto;
-	}
-
-	/* Contain Compare's floated columns so the scroll height is right. */
-	.stage.scroll::after {
-		content: '';
-		display: block;
-		clear: both;
 	}
 
 	/*

@@ -1,35 +1,37 @@
 <script lang="ts">
-	import type * as GeoJSON from 'geojson';
 	import type * as maplibregl from 'maplibre-gl';
 	import { get } from 'svelte/store';
-	import AccessibilityLayer from './layers/AccessibilityLayer.svelte';
-	import BaseMap from './maps/BaseMap.svelte';
-	import IndexScorecard from './controls/IndexScorecard.svelte';
-	import IndexExplanationLayer from './layers/IndexExplanationLayer.svelte';
-	import Legend from './plotting/Legend.svelte';
-	import ToolPane from './ToolPane.svelte';
 	import type { TargetStoreImpl } from '../js/types';
 	import { current_accessibility_index, current_accessibility_index_data } from '../stores/stores';
+	import IndexScorecard from './controls/IndexScorecard.svelte';
+	import AccessibilityLayer from './layers/AccessibilityLayer.svelte';
+	import IndexExplanationLayer from './layers/IndexExplanationLayer.svelte';
+	import BaseMap from './maps/BaseMap.svelte';
+	import Legend from './plotting/Legend.svelte';
+	import ToolPane from './ToolPane.svelte';
 
-	export let metadata: TargetStoreImpl;
+	let { metadata }: { metadata: TargetStoreImpl | undefined } = $props();
 
-	let map: maplibregl.Map | undefined;
-	let styleLoaded = false;
-	let mapLoaded = false;
+	let map = $state.raw<maplibregl.Map>();
+	let mapLoaded = $state(false);
+	let styleLoaded = $state(false);
 
-	$: target = metadata?.getTarget($current_accessibility_index);
-	$: values =
-		$current_accessibility_index_data?.features.map((f: GeoJSON.Feature) => f.properties?.v) ?? [];
+	const target = $derived(metadata?.getTarget($current_accessibility_index));
+	const values = $derived(
+		$current_accessibility_index_data?.features.map((f) => f.properties.v) ?? []
+	);
 	// The grid on the map belongs to the index chosen when it arrived. Until the
 	// next one lands, the legend stays hidden rather than describe the new index
-	// over the old grid. `get` keeps the index out of this block's dependencies.
-	$: grid_index = $current_accessibility_index_data ? get(current_accessibility_index) : undefined;
+	// over the old grid. `get` keeps the index out of this one's dependencies.
+	const grid_index = $derived(
+		$current_accessibility_index_data ? get(current_accessibility_index) : undefined
+	);
 </script>
 
 <ToolPane>
-	<svelte:fragment slot="rail">
+	{#snippet rail()}
 		<IndexScorecard {metadata} />
-	</svelte:fragment>
+	{/snippet}
 
 	<BaseMap container="accessibility_map" bind:ref={map} bind:mapLoaded bind:styleLoaded />
 

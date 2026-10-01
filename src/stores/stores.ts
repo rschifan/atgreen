@@ -1,7 +1,14 @@
+import type * as GeoJSON from 'geojson';
 import { writable } from 'svelte/store';
+import type { CityCollection, CityProperties, Grid, TargetStoreImpl } from '../js/types';
 
-/** @type {import('svelte/store').Writable<{ text: string, feature: any } | undefined>} */
-export const current_city = writable(undefined);
+/** The open city: its name as the API spells it, and its feature from the city list. */
+export type City = {
+	text: string;
+	feature: GeoJSON.Feature<GeoJSON.Point, CityProperties>;
+};
+
+export const current_city = writable<City | undefined>(undefined);
 /**
  * Set once here rather than in Measure's onMount. That hook reset it to WHO on
  * every mount, which was invisible while panels mounted once and became "your
@@ -17,7 +24,7 @@ export const current_accessibility_index = writable('WHO');
  * results, and the [city] layout resolves a URL segment against it. Keeping it
  * here means one request rather than one per consumer.
  */
-export const cities = writable(/** @type {{ features: any[] } | undefined} */ (undefined));
+export const cities = writable<CityCollection | undefined>(undefined);
 
 /**
  * The index metadata from /rpc/getindexes, as a TargetStoreImpl.
@@ -25,14 +32,14 @@ export const cities = writable(/** @type {{ features: any[] } | undefined} */ (u
  * Fetched by the [city] layout and read by the panes below it. A layout cannot
  * hand values to its pages the way it can to slot content, so this is the seam.
  */
-export const metadata = writable(
-	/** @type {import('../js/types').TargetStoreImpl | undefined} */ (undefined)
-);
+export const metadata = writable<TargetStoreImpl | undefined>(undefined);
 
 /** Whether the header search is expanded. The landing page's button opens it. */
 export const search_active = writable(false);
-export const current_accessibility_index_data = writable();
-export const current_cell = writable();
+/** The grid on Measure's map, for the legend and the fit button. */
+export const current_accessibility_index_data = writable<Grid | undefined>(undefined);
+/** The cell selected on Measure's map; {x: -1, y: -1} when none. */
+export const current_cell = writable<{ x: number; y: number } | undefined>(undefined);
 
 /**
  * Whether anything is in flight.
@@ -52,12 +59,10 @@ function createLoadingStore() {
 	const count = writable(0);
 
 	return {
-		/** @param {(loading: boolean) => void} run */
-		subscribe(run) {
+		subscribe(run: (loading: boolean) => void) {
 			return count.subscribe((n) => run(n > 0));
 		},
-		/** @param {boolean} value */
-		set(value) {
+		set(value: boolean) {
 			count.update((n) => (value ? n + 1 : Math.max(0, n - 1)));
 		},
 		/** Drop every outstanding ticket; for teardown, where balance is not guaranteed. */

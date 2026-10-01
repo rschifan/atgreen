@@ -6,15 +6,14 @@
 	 */
 	import type * as GeoJSON from 'geojson';
 	import { format, geoMercator, geoPath, select } from 'd3';
-	import { tick } from 'svelte';
 	import { get_accessibility_layer } from '../js/api';
 	import { classify, join_on_cell } from '../js/stats';
-	import type { TargetStoreImpl } from '../js/types';
+	import type { Grid, TargetStoreImpl } from '../js/types';
 	import { current_city } from '../stores/stores';
 	import SelectField from './fields/SelectField.svelte';
 	import ToolPane from './ToolPane.svelte';
 
-	export let metadata: TargetStoreImpl;
+	let { metadata }: { metadata: TargetStoreImpl | undefined } = $props();
 
 	const GROUPS = 4;
 	const COLORS = ['#bae4b3', '#74c476', '#31a354', '#006d2c'];
@@ -22,76 +21,88 @@
 	const BAR = 10;
 	const MAP_HEIGHT = 400;
 
-	type Side = {
-		name: string;
-		data: GeoJSON.FeatureCollection;
-	} & ReturnType<typeof classify>;
+	type Side = { name: string; data: Grid } & ReturnType<typeof classify>;
 
-	let selectedIdA = 0;
-	let selectedIdB = 1;
-	let sides: Side[] | undefined;
-	let root: HTMLElement;
-	let stageWidth = 0;
-	let loads = 0;
+	let selectedIdA = $state(0);
+	let selectedIdB = $state(1);
+	let sides = $state.raw<Side[]>();
+	let root = $state<HTMLElement>();
+	let stageWidth = $state(0);
 
 	// Derived from /rpc/getindexes, so adding an index server-side is enough.
-	$: indexes = metadata?.indexes() ?? [];
-	$: items_a = indexes.map((label, id) => ({ value: String(id), label }));
+	const indexes = $derived(metadata?.indexes() ?? []);
+	const items_a = $derived(indexes.map((label, id) => ({ value: String(id), label })));
 	// Index B cannot be the index already chosen as A.
-	$: items_b = items_a.map((i) => ({ ...i, disabled: Number(i.value) === selectedIdA }));
-	$: same_index = selectedIdA === selectedIdB;
+	const items_b = $derived(
+		items_a.map((i) => ({ ...i, disabled: Number(i.value) === selectedIdA }))
+	);
+	const same_index = $derived(selectedIdA === selectedIdB);
 
 	// Clamped at zero: before the stage is measured, a negative width gives d3
 	// `M NaN,NaN` for every path.
-	$: columnWidth = Math.max(0, stageWidth < 500 ? stageWidth - 2 * MARGIN : stageWidth / 2);
-	$: height = columnWidth > 0 && columnWidth < MAP_HEIGHT ? columnWidth : MAP_HEIGHT;
-	$: inner = columnWidth - 2 * MARGIN;
+	const columnWidth = $derived(
+		Math.max(0, stageWidth < 500 ? stageWidth - 2 * MARGIN : stageWidth / 2)
+	);
+	const height = $derived(columnWidth > 0 && columnWidth < MAP_HEIGHT ? columnWidth : MAP_HEIGHT);
+	const inner = $derived(columnWidth - 2 * MARGIN);
 
-	$: load($current_city?.text, indexes[selectedIdA], indexes[selectedIdB]);
-	$: if (sides && columnWidth > 0) draw_maps(sides, columnWidth, height);
-
-	async function load(city: string | undefined, a: string | undefined, b: string | undefined) {
-		const load_id = ++loads;
-		sides = undefined;
+	// The two grids for the city and the two chosen indexes. A response for a
+	// choice the user has already moved on from is dropped.
+	$effect(() => {
+		const city = $current_city?.text;
+		const a = indexes[selectedIdA];
+		const b = indexes[selectedIdB];
 		const bandA = a ? metadata?.getBand(a) : undefined;
 		const bandB = b ? metadata?.getBand(b) : undefined;
+		sides = undefined;
 		if (!city || !a || !b || a === b || bandA === undefined || bandB === undefined) return;
-		try {
-			// The same requests Measure makes, so a band it has drawn comes from the cache.
-			const [dataA, dataB] = await Promise.all([
-				get_accessibility_layer(city, bandA).send(),
-				get_accessibility_layer(city, bandB).send()
-			]);
-			if (load_id !== loads) return; // a newer choice is already on its way
-			// Joined on the grid: two indexes cover different cells (Turin: 3,755 for
-			// WHO, 3,867 for BE3), so zipping their values by position mispaired them.
-			const joined = join_on_cell(dataA?.features, dataB?.features);
-			if (joined.length === 0) return;
-			sides = [
-				{
-					name: a,
-					data: dataA,
-					...classify(
-						joined.map((d) => d.a),
-						GROUPS
-					)
-				},
-				{
-					name: b,
-					data: dataB,
-					...classify(
-						joined.map((d) => d.b),
-						GROUPS
-					)
-				}
-			];
-		} catch (error) {
-			console.error('Compare: could not load the two indexes', error);
-		}
-	}
+		let stale = false;
+		// The same requests Measure makes, so a band it has drawn comes from the cache.
+		Promise.all([
+			get_accessibility_layer(city, bandA).send(),
+			get_accessibility_layer(city, bandB).send()
+		]).then(
+			([dataA, dataB]) => {
+				if (stale) return;
+				// Joined on the grid: two indexes cover different cells (Turin: 3,755 for
+				// WHO, 3,867 for BE3), so zipping their values by position mispaired them.
+				const joined = join_on_cell(dataA.features, dataB.features);
+				if (joined.length === 0) return;
+				sides = [
+					{
+						name: a,
+						data: dataA,
+						...classify(
+							joined.map((d) => d.a),
+							GROUPS
+						)
+					},
+					{
+						name: b,
+						data: dataB,
+						...classify(
+							joined.map((d) => d.b),
+							GROUPS
+						)
+					}
+				];
+			},
+			(error) => {
+				if (!stale) console.error('Compare: could not load the two indexes', error);
+			}
+		);
+		return () => {
+			stale = true;
+		};
+	});
 
-	async function draw_maps(sides: Side[], width: number, height: number) {
-		await tick();
+	// Effects run after the DOM updates, so the two map <svg>s exist by now.
+	$effect(() => {
+		if (sides && columnWidth > 0) draw_maps(sides, columnWidth, height);
+	});
+
+	function draw_maps(sides: Side[], width: number, height: number) {
+		if (!root) return;
 		select(root)
 			.selectAll<SVGSVGElement, unknown>('svg.map')
 			.each(function (_, i) {
@@ -117,6 +128,7 @@
 
 	/** One place, in both maps, and the group it falls in on each side. */
 	function highlight_cell(x: number, y: number) {
+		if (!root) return;
 		const groups: (string | null)[] = [];
 		select(root)
 			.selectAll('svg.map')
@@ -140,6 +152,7 @@
 
 	/** One group, in both maps and both bars. */
 	function highlight_group(q: number) {
+		if (!root) return;
 		select(root).selectAll(`path[data-q="${q}"]`).classed('hit', true);
 		select(root)
 			.selectAll<SVGRectElement, unknown>('svg.groups rect')
@@ -149,6 +162,7 @@
 	}
 
 	function clear() {
+		if (!root) return;
 		select(root).selectAll('.hit').classed('hit', false);
 		select(root).selectAll('.dim').classed('dim', false);
 	}
@@ -161,7 +175,7 @@
 </script>
 
 <ToolPane scroll>
-	<svelte:fragment slot="rail">
+	{#snippet rail()}
 		<SelectField
 			title="Index A"
 			placeholder="Select an accessibility index"
@@ -179,7 +193,7 @@
 				: undefined}
 			onchange={(v) => (selectedIdB = Number(v))}
 		/>
-	</svelte:fragment>
+	{/snippet}
 
 	<div bind:clientWidth={stageWidth} bind:this={root} class="columns">
 		{#if sides && !same_index}
@@ -208,10 +222,10 @@
 									role="button"
 									tabindex="0"
 									aria-label="Highlight group {q}"
-									on:mouseover={() => highlight_group(q)}
-									on:focus={() => highlight_group(q)}
-									on:mouseleave={clear}
-									on:blur={clear}
+									onmouseover={() => highlight_group(q)}
+									onfocus={() => highlight_group(q)}
+									onmouseleave={clear}
+									onblur={clear}
 								/>
 								<text x={x + w / 2} y="0" text-anchor="middle">G{q}</text>
 							{/each}

@@ -3,10 +3,6 @@ import { scaleDiverging } from 'd3';
 import { ACOLOR_GREEN, ACOLOR_MID, ACOLOR_RED } from './colors';
 import { ClassificationScheme, AccessibilityIndexType, INDEX_CLASSIFICATION } from './types';
 
-export function get_target_rule(operator: string, threshold: number) {
-	return [operator, ['get', 'v'], threshold];
-}
-
 /** Min and max in one pass, without spreading the array onto the call stack. */
 export function extent(data: number[]): { min: number; max: number } {
 	let min = Infinity;
@@ -198,37 +194,6 @@ export function get_accessibility_layer_fill_opacity(): ExpressionSpecification 
 	return ['interpolate', ['linear'], ['zoom'], 10, 1, 17, 0];
 }
 
-// export function get_accessibility_layer_fill_opacity(
-//     predicate: string, threshold: number
-// ) {
-
-// return [
-// 'case',
-// ['==', ['feature-state', 'selected'], true],
-// 0.4,
-// ['==', ['feature-state', 'hover'], true],
-// 1.0,
-// ['case', get_target_rule(predicate, threshold), 0.8, 0.4]
-// ]
-// }
-
-/**
- * One filter expression for Explore's green-areas layers.
- *
- * Explore has three independent controls — type, minimum size, name — and each
- * used to call `setFilter` from its own reactive block with a COMPLETE
- * replacement expression. `setFilter` does not merge, so whichever block ran
- * last silently discarded the other two. Reproduced on production: set the size
- * slider to "576 ha and larger", then untick one type, and every small area
- * comes back while the slider still reads 576.
- *
- * Combining them here means the three controls compose, and the result is a
- * pure function that can be tested without a map.
- *
- * @param types selected `osm_value` codes, or undefined for "no type filter"
- * @param min_size hectares; 0 and undefined both mean "no size filter"
- * @param names matching `osm_name` values, or undefined when the search is empty
- */
 export function build_greenareas_filter(
 	types?: number[],
 	min_size?: number,

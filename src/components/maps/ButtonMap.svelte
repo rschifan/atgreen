@@ -22,8 +22,18 @@
 	} = $props();
 
 	let container: HTMLDivElement;
-	// MapLibre takes any object with onAdd/onRemove; this one hands it the element below.
-	const control: maplibregl.IControl = { onAdd: () => container, onRemove: () => {} };
+	/*
+		MapLibre takes any object with onAdd/onRemove. onAdd hands it the element
+		below, which MapLibre then moves into its own control bar — outside the DOM
+		Svelte manages, so Svelte cannot take it out again. IControl's contract is
+		that onRemove removes it; the no-op here left "Deselect cell" on screen
+		after the cell was deselected.
+	*/
+	const control: maplibregl.IControl = {
+		onAdd: () => container,
+		// eslint-disable-next-line svelte/no-dom-manipulating -- MapLibre owns this node now (see above)
+		onRemove: () => container.remove()
+	};
 
 	onMount(() => map.addControl(control, 'top-right'));
 

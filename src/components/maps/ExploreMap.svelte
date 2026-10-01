@@ -3,38 +3,46 @@
 	 * Explore's map: the city's OpenStreetMap green areas, filtered by the rail,
 	 * named on hover, and opened on OpenStreetMap on click.
 	 */
-	import type * as GeoJSON from 'geojson';
 	import type * as maplibregl from 'maplibre-gl';
+	import type { Snippet } from 'svelte';
 	import { BOUNDARY_MAP_COLOR } from '../../js/colors';
 	import { build_greenareas_filter } from '../../js/layers';
-	import { LABEL_FONT, hover_popup, track_hover } from '../../js/map.js';
-	import { green_type_label } from '../../js/types';
+	import { LABEL_FONT, hover_popup, track_hover } from '../../js/map';
+	import { green_type_label, type GreenArea, type GreenAreas } from '../../js/types';
 	import { adjust_zoom, create_empty_geojson, html } from '../../js/utils';
 	import BaseMap from './BaseMap.svelte';
 	import LayerControls from './LayerControls.svelte';
 
-	export let container: string;
-	export let data: GeoJSON.FeatureCollection | undefined;
-	/** The green-type ids to show. */
-	export let green_types: number[];
-	export let minimum_size: number;
-	/** Names matched by the rail's search; undefined when it is empty. */
-	export let selected_green_areas: string[] | undefined;
+	let {
+		container,
+		data,
+		green_types,
+		minimum_size,
+		selected_green_areas,
+		children
+	}: {
+		container: string;
+		data: GreenAreas | undefined;
+		/** The green-type ids to show. */
+		green_types: number[];
+		minimum_size: number | undefined;
+		/** Names matched by the rail's search; undefined when it is empty. */
+		selected_green_areas: string[] | undefined;
+		children?: Snippet;
+	} = $props();
 
 	const SOURCE = 'GREENAREAS_SOURCE';
 	const LAYER = 'GREENAREAS_LAYER';
 	const LABELS_LAYER = 'GREENAREAS_LABELS_LAYER';
 	const OSM_ELEMENT = ['way', 'relation'];
-
-	let map: maplibregl.Map | undefined;
 	const popup = hover_popup();
 
+	let map = $state.raw<maplibregl.Map>();
+	// Whether the source and layers exist yet: data and filters wait for them.
+	let styled = $state(false);
+
 	function add_layers(target: maplibregl.Map) {
-		target.addSource(SOURCE, {
-			type: 'geojson',
-			data: data ?? create_empty_geojson(),
-			generateId: true
-		});
+		target.addSource(SOURCE, { type: 'geojson', data: create_empty_geojson(), generateId: true });
 		target.addLayer({
 			id: LAYER,
 			type: 'fill',
@@ -60,19 +68,21 @@
 				'text-color': 'white'
 			}
 		});
-		apply_filter(target, green_types, minimum_size, selected_green_areas);
-		adjust_zoom(data, target);
+		styled = true;
 	}
 
 	function wire(target: maplibregl.Map) {
 		track_hover(target, LAYER, SOURCE, (feature, e) => {
 			if (!feature || !e) return void popup.remove();
-			popup.setLngLat(e.lngLat).setHTML(describe_area(feature.properties)).addTo(target);
+			popup
+				.setLngLat(e.lngLat)
+				.setHTML(describe_area(feature.properties as GreenArea))
+				.addTo(target);
 		});
 		// The popup follows the pointer across a large park, not just onto it.
 		target.on('mousemove', LAYER, (e) => popup.setLngLat(e.lngLat));
 		target.on('click', LAYER, (e) => {
-			const p = e.features?.[0]?.properties;
+			const p = e.features?.[0]?.properties as GreenArea | undefined;
 			if (p)
 				window.open(
 					`https://www.openstreetmap.org/${OSM_ELEMENT[p.osm_element]}/${p.osm_id}`,
@@ -84,8 +94,7 @@
 
 	// `html` escapes every value: `osm_name` is OpenStreetMap free text, and this
 	// string goes to setHTML, which assigns to innerHTML.
-	function describe_area(p: GeoJSON.GeoJsonProperties) {
-		if (!p) return '';
+	function describe_area(p: GreenArea) {
 		const size = (Math.round(p.size * 100) / 100).toLocaleString('en');
 		return (
 			(p.osm_name ? html`<p><b>${p.osm_name}</b></p>` : '') +
@@ -93,11 +102,12 @@
 		);
 	}
 
-	// New data (another city) replaces the source and re-frames the map.
-	$: if (map?.getSource(SOURCE) && data) {
+	// The city's areas (another city's, after a switch) replace the source and frame the map.
+	$effect(() => {
+		if (!map || !styled || !data) return;
 		map.getSource<maplibregl.GeoJSONSource>(SOURCE)?.setData(data);
 		adjust_zoom(data, map);
-	}
+	});
 
 	/*
 		ONE filter, not three. Each control used to call `setFilter` from its own
@@ -105,24 +115,15 @@
 		not merge, so whichever ran last silently discarded the others.
 		`build_greenareas_filter` composes them and is unit tested without a map.
 	*/
-	$: apply_filter(map, green_types, minimum_size, selected_green_areas);
-
-	function apply_filter(
-		target: maplibregl.Map | undefined,
-		types: number[] | undefined,
-		min_size: number | undefined,
-		names: string[] | undefined
-	) {
-		if (!target) return;
-		const filter = build_greenareas_filter(types, min_size, names);
-		for (const layer of [LAYER, LABELS_LAYER]) {
-			if (target.getLayer(layer)) target.setFilter(layer, filter);
-		}
-	}
+	$effect(() => {
+		if (!map || !styled) return;
+		const filter = build_greenareas_filter(green_types, minimum_size, selected_green_areas);
+		for (const layer of [LAYER, LABELS_LAYER]) map.setFilter(layer, filter);
+	});
 </script>
 
 <BaseMap {container} bind:ref={map} onstyle={add_layers} onload={wire}>
-	<slot />
+	{@render children?.()}
 </BaseMap>
 {#if map}
 	<LayerControls {map} layers={[LAYER, LABELS_LAYER]} {data} noun="green areas" />

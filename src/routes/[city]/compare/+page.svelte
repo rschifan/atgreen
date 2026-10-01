@@ -1,14 +1,6 @@
 <script lang="ts">
-	import { cityLabel } from '../../../js/slug';
 	import Compare from '../../../components/Compare.svelte';
-	import { current_city, metadata } from '../../../stores/stores.js';
+	import { metadata } from '../../../stores/stores';
 </script>
 
-<svelte:head>
-	<title>{$current_city ? cityLabel($current_city.text) : 'ATGreen'} — Compare</title>
-</svelte:head>
-
-{#if $current_city}
-	<!-- ToolPane supplies the rail/stage layout; no wrapper needed here. -->
-	<Compare metadata={$metadata} />
-{/if}
+<Compare metadata={$metadata} />

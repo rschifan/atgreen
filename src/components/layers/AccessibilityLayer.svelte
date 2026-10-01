@@ -5,81 +5,51 @@
 	 * the explanation layer answers with the green areas that cell can reach.
 	 */
 	import centroid from '@turf/centroid';
-	import type * as GeoJSON from 'geojson';
-	import { useWatcher } from 'alova';
 	import { onDestroy, onMount } from 'svelte';
-	import type { Unsubscriber } from 'svelte/store';
+	import { get } from 'svelte/store';
 	import { get_accessibility_layer } from '../../js/api';
 	import {
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../../js/layers';
 	import { hover_popup, maplibregl, track_hover } from '../../js/map';
-	import { describe_cell, type TargetStoreImpl } from '../../js/types';
+	import { describe_cell, type Grid, type TargetStoreImpl } from '../../js/types';
 	import { adjust_zoom, create_empty_geojson } from '../../js/utils';
 	import {
 		current_accessibility_index,
 		current_accessibility_index_data,
 		current_cell,
-		current_city,
-		loading
+		current_city
 	} from '../../stores/stores';
 	import LayerControls from '../maps/LayerControls.svelte';
 
-	export let metadata: TargetStoreImpl;
-	export let map: maplibregl.Map;
+	let { map, metadata }: { map: maplibregl.Map; metadata: TargetStoreImpl | undefined } = $props();
 
 	const SOURCE = 'ACCESSIBILITY_INDEX_SOURCE';
 	const LAYER = 'ACCESSIBILITY_INDEX_LAYER';
 	const popup = hover_popup();
 	let selected_cell_id: string | number | undefined;
 
-	$: target = metadata?.getTarget($current_accessibility_index);
+	const target = $derived(metadata?.getTarget($current_accessibility_index));
 
-	function paint(data: GeoJSON.FeatureCollection) {
+	function show(grid: Grid) {
+		map.getSource<maplibregl.GeoJSONSource>(SOURCE)?.setData(grid);
+		adjust_zoom(grid, map);
 		const index = target?.index;
-		if (!index || !map.getLayer(LAYER)) return;
-		map.setPaintProperty(
-			LAYER,
-			'fill-color',
-			get_accessibility_layer_fill_color(
-				data.features.map((f) => f.properties?.v),
-				index.type,
-				index.classification,
-				target.threshold
-			)
-		);
+		if (index && target)
+			map.setPaintProperty(
+				LAYER,
+				'fill-color',
+				get_accessibility_layer_fill_color(
+					grid.features.map((f) => f.properties.v),
+					index.type,
+					index.classification,
+					target.threshold
+				)
+			);
 		map.setPaintProperty(LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
+		current_accessibility_index_data.set(grid);
 	}
-
-	// One request per (city, band). `immediate: true` paid for one city selection
-	// three times (~827 KB each for Turin), and `immediate: false` alone never
-	// fires, because both stores are already set by the time this mounts.
-	const request = useWatcher(
-		() =>
-			get_accessibility_layer(
-				$current_city?.text ?? '',
-				metadata?.getBand($current_accessibility_index) ?? -1
-			),
-		[current_city, current_accessibility_index],
-		{ debounce: 500, immediate: false }
-	);
-
-	// The de-duplication key lives on a plain object, not in a `let`: Svelte 5
-	// stops re-running a reactive block that reads and writes the same variable,
-	// which silently stopped the fetch from ever firing.
-	const requested = { key: undefined as string | undefined };
-	$: {
-		const city = $current_city?.text;
-		const band = metadata?.getBand($current_accessibility_index);
-		const key = `${city}|${band}`;
-		if (city && band !== undefined && key !== requested.key) {
-			requested.key = key;
-			request.send();
-		}
-	}
-
-	let unsubscribers: Unsubscriber[] = [];
 
 	onMount(() => {
 		map.addSource(SOURCE, { type: 'geojson', data: create_empty_geojson(), generateId: true });
@@ -116,42 +86,61 @@
 			map.setFeatureState({ source: SOURCE, id: selected_cell_id }, { selected: true });
 			current_cell.set({ x: feature.properties.x, y: feature.properties.y });
 		});
+	});
 
-		unsubscribers = [
-			request.data.subscribe((value) => {
-				if (value?.features?.length > 0) {
-					map.getSource<maplibregl.GeoJSONSource>(SOURCE)?.setData(value);
-					adjust_zoom(value, map);
-					paint(value);
-					current_accessibility_index_data.set(value);
-				}
-				loading.set(false);
-			}),
+	/*
+		One request per (city, index), a moment after the last change, so clicking
+		through the rail does not fetch every grid on the way (Turin's is ~800 KB).
+		alova caches each, so coming back to one is instant; a response for a pair
+		the user has already moved on from is dropped.
+	*/
+	$effect(() => {
+		const city = $current_city?.text;
+		const band = metadata?.getBand($current_accessibility_index);
+		if (!city || band === undefined) return;
+		let stale = false;
+		const timer = setTimeout(() => {
+			get_accessibility_layer(city, band)
+				.send()
+				.then(
+					(grid) => {
+						if (!stale && grid?.features?.length) show(grid);
+					},
+					(error) => {
+						if (!stale) console.error('Measure: index grid request failed', error);
+					}
+				);
+		}, 300);
+		return () => {
+			stale = true;
+			clearTimeout(timer);
+		};
+	});
 
-			// A selected cell dims the rest; deselecting restores them and re-frames the city.
-			current_cell.subscribe((cell) => {
-				if (cell && cell.x !== -1 && cell.y !== -1) {
-					map.setPaintProperty(LAYER, 'fill-opacity', [
-						'case',
-						['boolean', ['feature-state', 'selected'], false],
-						1.0,
-						['boolean', ['feature-state', 'hover'], false],
-						1.0,
-						0.15
-					]);
-					return;
-				}
-				map.setPaintProperty(LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
-				if (selected_cell_id !== undefined)
-					map.setFeatureState({ source: SOURCE, id: selected_cell_id }, { selected: false });
-				selected_cell_id = undefined;
-				if ($current_accessibility_index_data) adjust_zoom($current_accessibility_index_data, map);
-			})
-		];
+	// A selected cell dims the rest; deselecting restores them and re-frames the city.
+	$effect(() => {
+		const cell = $current_cell;
+		if (cell && cell.x !== -1 && cell.y !== -1) {
+			map.setPaintProperty(LAYER, 'fill-opacity', [
+				'case',
+				['boolean', ['feature-state', 'selected'], false],
+				1.0,
+				['boolean', ['feature-state', 'hover'], false],
+				1.0,
+				0.15
+			]);
+			return;
+		}
+		map.setPaintProperty(LAYER, 'fill-opacity', get_accessibility_layer_fill_opacity());
+		if (selected_cell_id !== undefined)
+			map.setFeatureState({ source: SOURCE, id: selected_cell_id }, { selected: false });
+		selected_cell_id = undefined;
+		// Read, not tracked: a new grid must not re-frame the map by itself here.
+		const grid = get(current_accessibility_index_data);
+		if (grid) adjust_zoom(grid, map);
 	});
 
 	onDestroy(() => {
-		unsubscribers.forEach((stop) => stop());
 		// The map may already be gone, and every call below would then throw. Its
 		// removal drops the handlers registered above.
 		try {

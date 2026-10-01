@@ -583,6 +583,24 @@ test.describe('ATGreen smoke', () => {
 			await expect(rows.first()).toHaveAttribute('aria-pressed', 'false');
 		});
 
+		// MapLibre moves a control's element into its own bar, out of Svelte's reach,
+		// so the control removes it itself (ButtonMap). Without that, dev builds left
+		// "Deselect cell" on screen after the cell was deselected.
+		test('a map button goes away with what it controls', async ({ page }) => {
+			await stubBackend(page);
+			await page.goto('/Turin/measure');
+			const canvas = page.locator('canvas.maplibregl-canvas');
+			await expect(page.getByRole('button', { name: 'Center and zoom' })).toBeVisible({
+				timeout: 20000
+			});
+			const box = (await canvas.boundingBox())!;
+			await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+			const deselect = page.getByRole('button', { name: 'Deselect cell' });
+			await expect(deselect).toBeVisible({ timeout: 10000 });
+			await deselect.click();
+			await expect(deselect).toHaveCount(0);
+		});
+
 		// The API's percentile is the share of cities doing BETTER. The rail printed
 		// it as an ordinal, so Turin's top-16% result on WHO read as a poor "16th".
 		test('the selected index states its standing in words, the right way round', async ({

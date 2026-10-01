@@ -5,11 +5,11 @@
 	 * green, shown "After", with the cells that changed outlined and labelled.
 	 */
 	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import union from '@turf/union';
+	import { union } from '@turf/union';
 	import type * as GeoJSON from 'geojson';
 	// Type-only: value imports go through js/map, which registers the map worker.
 	import type * as maplibregl from 'maplibre-gl';
-	import { toast } from 'svelte-sonner';
+	import { untrack } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { get_custom_index, get_greened_index } from '../js/api';
@@ -17,27 +17,23 @@
 		get_accessibility_layer_fill_color,
 		get_accessibility_layer_fill_opacity
 	} from '../js/layers';
-	import { LABEL_FONT } from '../js/map.js';
-	import { cityLabel } from '../js/slug';
-	import { AccessibilityIndexType, DEFAULT_TARGET, INDEX_CLASSIFICATION } from '../js/types';
+	import { LABEL_FONT } from '../js/map';
+	import { toast_no_index } from '../js/notify';
+	import {
+		AccessibilityIndexType,
+		DEFAULT_TARGET,
+		INDEX_CLASSIFICATION,
+		type ComputedGrid
+	} from '../js/types';
 	import { adjust_zoom, create_empty_geojson, get_green_types_code } from '../js/utils';
 	import { current_city, loading } from '../stores/stores';
-	import GreenTypesField from './fields/GreenTypesField.svelte';
-	import IndexTypeField from './fields/IndexTypeField.svelte';
-	import RangeField from './fields/RangeField.svelte';
-	import TimeBudgetField from './fields/TimeBudgetField.svelte';
+	import IndexParamsFields from './fields/IndexParamsFields.svelte';
 	import BaseMap from './maps/BaseMap.svelte';
 	import ReferenceMap from './maps/ReferenceMap.svelte';
 	import Legend from './plotting/Legend.svelte';
 	import ToolPane from './ToolPane.svelte';
 
-	/*
-		The accessibility grid as MapLibre receives it: GeoJSON whose features carry
-		a cell `id` and a value `v`.
-	*/
-	type CellProperties = { id: number; v: number };
-	type CellFeature = GeoJSON.Feature<GeoJSON.Geometry, CellProperties>;
-	type CellCollection = GeoJSON.FeatureCollection<GeoJSON.Geometry, CellProperties>;
+	type CellFeature = ComputedGrid['features'][number];
 
 	const ACCESSIBILITY_SOURCE = 'ACCESSIBILITY_SOURCE';
 	const ACCESSIBILITY_LAYER = 'ACCESSIBILITY_LAYER';
@@ -48,45 +44,40 @@
 	const DIFF_LAYER = 'DIFF_LAYER';
 	const DIFF_TEXT_LAYER = 'DIFF_TEXT_LAYER';
 
-	let current_index_type = AccessibilityIndexType.MINIMUM_DISTANCE;
-	let current_green_types = ['parks', 'forests', 'grass'];
-	let current_time_budget = 5;
-	let current_greenarea_size = 0.5;
+	let type = $state(AccessibilityIndexType.MINIMUM_DISTANCE);
+	let green_types = $state(['parks', 'forests', 'grass']);
+	let size = $state(0.5);
+	let time = $state(5);
 
-	let reference_data: CellCollection | undefined;
-	let reference_map: maplibregl.Map | undefined;
-	let new_data: CellCollection | undefined;
-	let new_map: maplibregl.Map | undefined;
-	let referenceMapLoaded = false;
-	let newMapLoaded = false;
+	let reference_data = $state.raw<ComputedGrid>();
+	let reference_map = $state.raw<maplibregl.Map>();
+	let new_data = $state.raw<ComputedGrid>();
+	let new_map = $state.raw<maplibregl.Map>();
+	let referenceMapLoaded = $state(false);
+	let newMapLoaded = $state(false);
 
 	// Draw resets on every rail change, so the rail always describes what is shown.
-	$: target = DEFAULT_TARGET[current_index_type];
-	$: can_draw = !!$current_city && newMapLoaded && referenceMapLoaded;
+	const target = $derived(DEFAULT_TARGET[type]);
+	const can_draw = $derived(!!$current_city && newMapLoaded && referenceMapLoaded);
 
 	// Another city: clear both maps and take the Before map there (After follows it).
-	$: if ($current_city) {
-		reset();
-		reference_map?.flyTo({
-			center: $current_city.feature.geometry.coordinates,
+	$effect(() => {
+		const city = $current_city;
+		const map = reference_map;
+		if (!city) return;
+		untrack(reset);
+		map?.flyTo({
+			center: city.feature.geometry.coordinates as [number, number],
 			pitch: 0,
 			bearing: 0,
 			animate: false
 		});
-	}
+	});
 
-	// An index that came back empty, or a request that failed, is said once in a
-	// toast rather than left as a notification block in the rail.
-	function no_index() {
-		toast.error('No index generated', {
-			description: `No park with these characteristics found in ${cityLabel($current_city?.text)}.`
-		});
-	}
-
-	const values = (data: CellCollection) => data.features.map((f) => f.properties.v);
+	const values = (data: ComputedGrid) => data.features.map((f) => f.properties.v);
 
 	/** The cells whose value changed by more than rounding, with the change as `v`. */
-	function accessibility_diffmap(before: CellCollection, after: CellCollection): CellCollection {
+	function accessibility_diffmap(before: ComputedGrid, after: ComputedGrid): ComputedGrid {
 		const features: CellFeature[] = [];
 		const A = [...before.features].sort((a, b) => b.properties.id - a.properties.id);
 		const B = [...after.features].sort((a, b) => b.properties.id - a.properties.id);
@@ -113,18 +104,11 @@
 	}
 
 	/** The changed cells merged into one outline. */
-	function union_geojson(geojson: CellCollection): GeoJSON.Feature | GeoJSON.FeatureCollection {
-		type Area = GeoJSON.Polygon | GeoJSON.MultiPolygon;
-		let merged: Area | null = null;
-		for (const feature of geojson.features) {
-			const area = feature.geometry as Area;
-			// turf returns null when a union degenerates; keep what we had.
-			merged = merged === null ? area : (union(merged, area)?.geometry ?? merged);
-		}
+	function union_geojson(cells: ComputedGrid): GeoJSON.Feature | GeoJSON.FeatureCollection {
 		// Nothing to merge: an empty collection, not a Feature with a null geometry,
 		// which looks like GeoJSON but MapLibre will not accept.
-		if (merged === null) return create_empty_geojson();
-		return { type: 'Feature', geometry: merged, properties: {} };
+		if (cells.features.length === 0) return create_empty_geojson();
+		return union(cells) ?? create_empty_geojson();
 	}
 
 	/** Add a GeoJSON source, or replace its data if it is already there. */
@@ -134,7 +118,7 @@
 		else map.addSource(id, { type: 'geojson', data, generateId: true });
 	}
 
-	function add_diff_layer(diff: CellCollection, map: maplibregl.Map, labels = false) {
+	function add_diff_layer(diff: ComputedGrid, map: maplibregl.Map, labels = false) {
 		set_source(map, DIFF_SOURCE, diff);
 		set_source(map, DIFF_OUTLINE_SOURCE, union_geojson(diff));
 		if (!map.getLayer(DIFF_LAYER))
@@ -173,7 +157,7 @@
 			});
 	}
 
-	function add_accessibility_layer(data: CellCollection, map: maplibregl.Map) {
+	function add_accessibility_layer(data: ComputedGrid, map: maplibregl.Map) {
 		set_source(map, ACCESSIBILITY_SOURCE, data);
 		if (!map.getLayer(ACCESSIBILITY_LAYER))
 			map.addLayer({
@@ -185,12 +169,7 @@
 		map.setPaintProperty(
 			ACCESSIBILITY_LAYER,
 			'fill-color',
-			get_accessibility_layer_fill_color(
-				values(data),
-				current_index_type,
-				INDEX_CLASSIFICATION[current_index_type],
-				target
-			)
+			get_accessibility_layer_fill_color(values(data), type, INDEX_CLASSIFICATION[type], target)
 		);
 		map.setPaintProperty(
 			ACCESSIBILITY_LAYER,
@@ -227,47 +206,41 @@
 		reset();
 		// An empty green-type selection has no code; refuse it rather than ask the
 		// API for every type, which is what it used to fall back to.
-		const green_code = get_green_types_code(current_green_types);
-		if (!$current_city || !reference_map || green_code === undefined) return no_index();
+		const green_code = get_green_types_code(green_types);
+		if (!$current_city || !reference_map || green_code === undefined)
+			return toast_no_index($current_city?.text);
 
 		loading.set(true);
 		try {
-			const result = await get_custom_index(
-				current_index_type,
-				$current_city.text,
-				current_greenarea_size,
-				current_time_budget,
-				green_code
-			);
-			if (!result) return no_index();
+			const result = await get_custom_index(type, $current_city.text, size, time, green_code);
+			if (!result) return toast_no_index($current_city?.text);
 			reference_data = result;
 			add_accessibility_layer(result, reference_map);
 			adjust_zoom(result, reference_map);
 		} catch (error) {
-			no_index();
+			toast_no_index($current_city?.text);
 			console.error('Draw: index request failed', error);
 		} finally {
 			loading.set(false);
 		}
 	}
 
-	async function greenify(event: CustomEvent<{ cellid: number; feature: CellFeature }>) {
-		const { cellid, feature } = event.detail;
-		const green_code = get_green_types_code(current_green_types);
+	async function greenify(cellid: number, feature: GeoJSON.Feature) {
+		const green_code = get_green_types_code(green_types);
 		if (!$current_city || !reference_map || !new_map || !reference_data) return;
-		if (green_code === undefined) return no_index();
+		if (green_code === undefined) return toast_no_index($current_city?.text);
 
 		add_selected_cell_layer(feature, reference_map);
 		loading.set(true);
 		try {
 			const result = await get_greened_index(
-				current_index_type,
+				type,
 				$current_city.text,
-				current_greenarea_size,
-				current_time_budget,
+				size,
+				time,
 				green_code,
 				// The new green is the cell itself, at most 4 ha.
-				Math.min(current_greenarea_size, 4),
+				Math.min(size, 4),
 				cellid
 			);
 			if (!result) return;
@@ -287,9 +260,8 @@
 	}
 
 	// The After map follows the Before map's camera, one way.
-	function follow(event: CustomEvent<{ center: maplibregl.LngLat; zoom: number }>) {
+	function follow(center: maplibregl.LngLat, zoom: number) {
 		if (!new_map) return;
-		const { center, zoom } = event.detail;
 		const at = new_map.getCenter();
 		// LngLat objects compare by identity; compare coordinates, below a pixel.
 		if (
@@ -302,38 +274,19 @@
 </script>
 
 <ToolPane>
-	<svelte:fragment slot="rail">
-		<IndexTypeField bind:value={current_index_type} onchange={reset} />
-		<GreenTypesField
-			bind:value={current_green_types}
-			disabled={current_index_type === AccessibilityIndexType.EXPOSURE}
-			onchange={reset}
-		/>
-		<RangeField
-			title="Minimum size"
-			unit="ha"
-			min={0.5}
-			max={50}
-			step={0.5}
-			bind:value={current_greenarea_size}
-			onchange={reset}
-		/>
-		<TimeBudgetField
-			bind:value={current_time_budget}
-			disabled={current_index_type === AccessibilityIndexType.MINIMUM_DISTANCE}
-			onchange={reset}
-		/>
+	{#snippet rail()}
+		<IndexParamsFields bind:type bind:green_types bind:size bind:time onchange={reset} />
 
 		<Button disabled={!can_draw} onclick={compute}><PencilIcon /> Draw</Button>
 
-		<p class="hint">
+		<p class="m-0 text-[0.8125rem] leading-snug text-muted-foreground">
 			{#if reference_data}
 				Click a cell on the Before map to greenify it.
 			{:else}
 				Choose your parameters and press Draw.
 			{/if}
 		</p>
-	</svelte:fragment>
+	{/snippet}
 
 	<div class="pair">
 		<div class="cell">
@@ -341,12 +294,12 @@
 				container="draw_reference_map"
 				bind:ref={reference_map}
 				bind:mapLoaded={referenceMapLoaded}
-				on:new_green_cell={greenify}
-				on:camera={follow}
+				ongreen={greenify}
+				oncamera={follow}
 			>
 				<Badge variant="secondary" class="caption">Before</Badge>
 				{#if reference_data}
-					<Legend values={values(reference_data)} type={current_index_type} threshold={target} />
+					<Legend values={values(reference_data)} {type} threshold={target} />
 				{/if}
 			</ReferenceMap>
 		</div>
@@ -355,7 +308,7 @@
 			<BaseMap container="draw_new_map" bind:ref={new_map} bind:mapLoaded={newMapLoaded}>
 				<Badge variant="secondary" class="caption">After</Badge>
 				{#if new_data}
-					<Legend values={values(new_data)} type={current_index_type} threshold={target} />
+					<Legend values={values(new_data)} {type} threshold={target} />
 				{/if}
 			</BaseMap>
 		</div>
@@ -392,13 +345,6 @@
 			grid-template-columns: 1fr;
 			grid-template-rows: 1fr 1fr;
 		}
-	}
-
-	.hint {
-		margin: 0;
-		font-size: 0.8125rem;
-		line-height: 1.4;
-		color: var(--muted-foreground);
 	}
 
 	/* "Before" / "After": a caption over each map, never a click target. */
