@@ -76,23 +76,18 @@ async function stubBackend(page: Page) {
 
 async function selectTurin(page: Page) {
 	// Open the search the way a user does — the landing page's own "Select a city"
-	// button, which sets HeaderSearch's `active` prop. Carbon 0.112 renders TWO
-	// elements with aria-label="Search" (HeaderSearch.svelte:347 and :452), so
-	// clicking `.first()` was ambiguous: it passed locally and timed out on CI's
-	// slower runner, where the other one won.
+	// button, which opens the header's command palette.
 	await page.getByRole('button', { name: /Select a city/ }).click();
 
-	// Carbon 0.112 generates the input id per instance (it was a stable
-	// #search-input before), so target the class. Assert it is actually visible
-	// first: `fill()` on a hidden input reports a 30s timeout that says nothing
-	// about why the panel never opened.
-	const input = page.locator('.bx--header__search-input');
+	// Assert the input is visible first: `fill()` on a hidden input reports a 30s
+	// timeout that says nothing about why the palette never opened.
+	const input = page.getByPlaceholder('Search a city…');
 	await expect(input).toBeVisible({ timeout: 15000 });
 	await input.fill('Turin');
 
-	// Results are exposed as role=menuitem inside a role=menu. Selecting one is a
-	// navigation now, not a state change, so wait for the URL rather than guess.
-	await page.getByRole('menuitem', { name: 'Turin' }).click();
+	// Results are role=option in a listbox. Selecting one is a navigation, not a
+	// state change, so wait for the URL rather than guess.
+	await page.getByRole('option', { name: 'Turin' }).click();
 	await page.waitForURL('**/Turin/measure');
 }
 
@@ -270,9 +265,9 @@ test.describe('ATGreen smoke', () => {
 		await selectTurin(page);
 		await expect(page.getByText('WHO', { exact: true }).first()).toBeVisible({ timeout: 20000 });
 
-		// The HeaderAction button carries no accessible name; it is the panel toggle.
-		await page.locator('header button.bx--header__action').last().click();
-		await page.locator('header').getByRole('link', { name: 'Compare', exact: true }).click();
+		// The header's menu lists the sections; its entries are menu items that are links.
+		await page.getByRole('button', { name: 'Menu' }).click();
+		await page.getByRole('menuitem', { name: 'Compare', exact: true }).click();
 
 		await page.waitForURL('**/Turin/compare');
 		await expect(sectionLink(page, 'Compare')).toHaveAttribute('aria-current', 'page');
@@ -289,8 +284,8 @@ test.describe('ATGreen smoke', () => {
 	test('the header menu opens on the landing page', async ({ page }) => {
 		await stubBackend(page);
 		await page.goto('/');
-		await page.locator('header button.bx--header__action').last().click();
-		await page.locator('header').getByRole('link', { name: 'About' }).click({ timeout: 5000 });
+		await page.getByRole('button', { name: 'Menu' }).click();
+		await page.getByRole('menuitem', { name: 'About' }).click({ timeout: 5000 });
 		await page.waitForURL('**/about');
 	});
 
@@ -305,7 +300,7 @@ test.describe('ATGreen smoke', () => {
 		// The gear beside the search.
 		await page.getByRole('link', { name: 'Settings' }).first().click();
 		await page.waitForURL('**/settings');
-		await expect(page.locator('.bx--tile--selectable')).toHaveCount(7);
+		await expect(page.getByRole('radio')).toHaveCount(7);
 
 		await page.getByText('Firefly', { exact: true }).click();
 		// Back returns to the page Settings was opened from: here, the globe.
@@ -329,10 +324,10 @@ test.describe('ATGreen smoke', () => {
 		await stubBackend(page);
 		for (const path of ['/about', '/Turin/measure']) {
 			await page.goto(path);
-			await page.locator('header a.bx--header__name').click();
+			await page.getByRole('link', { name: 'ATGreen', exact: true }).click();
 			await page.waitForURL(/\/$/);
 			await page.goto(path);
-			await expect(page.locator('header.bx--header')).toHaveCount(1);
+			await expect(page.locator('header')).toHaveCount(1);
 			await page.getByRole('link', { name: 'Settings' }).first().click();
 			await page.waitForURL('**/settings');
 		}

@@ -1,4 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
 /*
@@ -15,7 +16,8 @@ import { defineConfig } from 'vitest/config';
 	say so.
 */
 export default defineConfig({
-	plugins: [sveltekit()],
+	// Tailwind for the shadcn-svelte components; see src/app.css.
+	plugins: [tailwindcss(), sveltekit()],
 	/*
 		MapLibre 6 runs its tile parsing in a MODULE worker that imports a shared
 		chunk. js/map.js loads it through `?worker&url`, which bundles that worker
