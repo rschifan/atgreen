@@ -6,7 +6,7 @@
 	 * map canvas, where it never showed.
 	 */
 	import { format } from 'd3';
-	import { is_clamped_high, ramp_color, robust_bounds } from '../../js/layers';
+	import { is_clamped_high, ramp_color, ramp_stops } from '../../js/layers';
 	import {
 		type AccessibilityIndexType,
 		ClassificationScheme,
@@ -35,24 +35,19 @@
 	let width = $state(0);
 	const inner = $derived(Math.max(0, width - M.left - M.right));
 	const log = $derived(INDEX_CLASSIFICATION[type] === ClassificationScheme.LOGARITHMIC);
-	const scaled = (x: number) => (log ? (x === 0 ? 0 : Math.log(x)) : x);
 
-	/*
-		The SAME bounds the map's ramp uses: get_colormap_rule clamps outliers off,
-		and a legend drawn from the raw min and max would disagree with the map.
-	*/
-	const bounds = $derived(robust_bounds(values, threshold));
-	const lo = $derived(scaled(bounds.min));
-	const hi = $derived(scaled(bounds.max));
-	const target = $derived(scaled(threshold));
+	// The map's own stops and colours, so the legend cannot disagree with it.
+	const stops = $derived(ramp_stops(values, threshold, INDEX_CLASSIFICATION[type]));
+	const lo = $derived(stops[0]);
+	const target = $derived(stops[1]);
+	const hi = $derived(stops[2]);
 	const clamped = $derived(is_clamped_high(values, threshold));
-	// The map's own colours, so the ramp cannot drift from the map.
 	const color = $derived(ramp_color(values, threshold, type));
-	const raw = (x: number) => (log ? Math.exp(x) : x);
+	// Stops are in the drawn scale: log2 for a logarithmic index.
+	const raw = (x: number) => (log ? 2 ** x : x);
 	const at = (i: number, n: number) => lo + ((hi - lo) * i) / n;
 	const label = (i: number) =>
-		format('~s')(Math.round(log ? Math.exp(at(i, TICKS)) : at(i, TICKS))) +
-		(i === TICKS && clamped ? '+' : '');
+		format('~s')(Math.round(raw(at(i, TICKS)))) + (i === TICKS && clamped ? '+' : '');
 </script>
 
 {#if values.length > 0 && Number.isFinite(threshold)}

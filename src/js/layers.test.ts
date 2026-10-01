@@ -4,6 +4,8 @@ import {
 	extent,
 	get_colormap_rule,
 	is_clamped_high,
+	ramp_color,
+	ramp_stops,
 	robust_bounds,
 	spread,
 	to_scale
@@ -217,5 +219,45 @@ describe('robust_bounds', () => {
 	it('reports when the top was clipped, so the legend can say so', () => {
 		expect(is_clamped_high(withOutlier, 5)).toBe(true);
 		expect(is_clamped_high(bulk.slice(0, 5), 3)).toBe(false);
+	});
+});
+
+describe('ramp_color', () => {
+	const rgb = (c: string) => c.match(/\d+/g)!.map(Number);
+	// The colour leans green (or sits on the pale midpoint), never red.
+	const not_red = (c: string) => rgb(c)[1] >= rgb(c)[0];
+	// Turin on ESA: even the worst-served 5% have 0.7 ha against a 0.5 ha target.
+	const turin_esa = [
+		0.698, 1.381, 1.905, 2.328, 2.737, 3.104, 3.444, 3.787, 4.182, 4.58, 5.001, 5.406, 5.92, 6.494,
+		7.147, 7.801, 8.598, 9.508, 11.158, 15.112
+	];
+
+	it('never paints a value that beats the target red', () => {
+		const color = ramp_color(turin_esa, 0.5, AccessibilityIndexType.EXPOSURE);
+		for (const v of turin_esa) expect(not_red(color(v)), `${v} ha -> ${color(v)}`).toBe(true);
+		expect(color(15.112)).toBe('rgb(26, 152, 80)');
+	});
+
+	it('does the same the other way round, for a distance every resident beats', () => {
+		const color = ramp_color([4, 3, 2, 1, 0], 5, AccessibilityIndexType.MINIMUM_DISTANCE);
+		for (const v of [4, 3, 2, 1, 0]) expect(not_red(color(v)), `${v} min`).toBe(true);
+	});
+
+	it('still runs red to green across a target inside the values', () => {
+		const color = ramp_color([0, 1, 2, 3, 4], 2, AccessibilityIndexType.EXPOSURE);
+		expect(color(0)).toBe('rgb(215, 48, 39)');
+		expect(color(4)).toBe('rgb(26, 152, 80)');
+	});
+
+	it('takes the same stops as the map', () => {
+		const rule = get_colormap_rule(
+			turin_esa,
+			AccessibilityIndexType.EXPOSURE,
+			ClassificationScheme.LINEAR,
+			0.5
+		);
+		expect([rule[3], rule[5], rule[7]]).toEqual(
+			ramp_stops(turin_esa, 0.5, ClassificationScheme.LINEAR)
+		);
 	});
 });
