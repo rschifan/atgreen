@@ -63,7 +63,7 @@
 	"dependencies": {
 		"@turf/union": "^7.4.0",
 		"maplibre-gl": "^6.11.2",
-		"simple-statistics": "^7.8.3"
+		"simple-statistics": "^7.12.1"
 	},
 	"overrides": {
 		"cookie": "^0.7.0"
